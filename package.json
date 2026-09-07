@@ -16,7 +16,8 @@
     "lint": "npm run lint --workspaces --if-present",
     "db:generate": "npm run db:generate --workspace=@librarian/database",
     "db:push": "npm run db:push --workspace=@librarian/database",
-    "db:seed": "npm run db:seed --workspace=@librarian/database"
+    "db:seed": "npm run db:seed --workspace=@librarian/database",
+    "db:import:mega": "npm run import:mega --workspace=@librarian/web"
   },
   "devDependencies": {
     "typescript": "^5.4.5"

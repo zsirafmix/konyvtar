@@ -21,6 +21,8 @@ services:
         value: production
       - key: PORT
         value: 3000
+      - key: MEGA_FOLDER_URL
+        value: https://mega.nz/folder/qNIjgLSB#NduwPvQZ4JlvEl-fIjZbkA
 
 databases:
   - name: librarian-postgres
