@@ -30,6 +30,7 @@ export default function BookDetailPage({ params }: { params: { slug: string } })
   const [readingStatus, setReadingStatus] = useState<string>("WANT_TO_READ");
   const [userNote, setUserNote] = useState<string>("");
   const [noteSaved, setNoteSaved] = useState<boolean>(false);
+  const [imgError, setImgError] = useState<boolean>(false);
 
   useEffect(() => {
     async function loadBook() {
@@ -91,11 +92,17 @@ export default function BookDetailPage({ params }: { params: { slug: string } })
       <div className="flex flex-col md:flex-row gap-8 items-start">
         {/* Large 2:3 Cover */}
         <div className="w-full sm:w-64 aspect-[2/3] flex-shrink-0 rounded-2xl overflow-hidden shadow-2xl bg-muted border border-border">
-          {book.coverUrl ? (
-            <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
+          {book.coverUrl && !imgError ? (
+            <img
+              src={book.coverUrl}
+              alt={book.title}
+              onError={() => setImgError(true)}
+              className="w-full h-full object-cover"
+            />
           ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center bg-secondary">
-              <span className="font-bold text-base">{book.title}</span>
+            <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-gradient-to-br from-secondary to-muted">
+              <span className="font-bold text-lg text-foreground">{book.title}</span>
+              <span className="text-sm text-muted-foreground mt-2">{book.authors?.map((a: any) => a.name).join(", ")}</span>
             </div>
           )}
         </div>

@@ -138,6 +138,9 @@ export default function AskLibraryPage() {
                             <img
                               src={book.coverUrl}
                               alt={book.title}
+                              onError={(e) => {
+                                (e.currentTarget as HTMLElement).style.display = "none";
+                              }}
                               className="w-10 aspect-[2/3] object-cover rounded-md"
                             />
                           ) : (

@@ -41,11 +41,13 @@ export const BookCard: React.FC<BookCardProps> = ({
   const [isFavorite, setIsFavorite] = useState(initialFavorite);
   const [status, setStatus] = useState(initialStatus);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
+  const [imgError, setImgError] = useState(false);
 
   // Check 21 day rule for free members
-  const releaseDate = libraryReleaseAt ? new Date(libraryReleaseAt) : new Date();
-  const availableAt = new Date(releaseDate.getTime() + 21 * 24 * 3600 * 1000);
-  const isWithin21Days = distributionStatus === "LICENSED" && Date.now() < availableAt.getTime();
+  const isWithin21Days =
+    distributionStatus === "PROTECTED_COMMERCIAL" &&
+    libraryReleaseAt &&
+    new Date(libraryReleaseAt).getTime() > Date.now();
 
   const handleFavoriteClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -66,10 +68,11 @@ export const BookCard: React.FC<BookCardProps> = ({
     <div className="group relative flex flex-col w-[170px] sm:w-[190px] flex-shrink-0 transition-transform duration-300 hover:-translate-y-1">
       {/* 2:3 Aspect Ratio Book Cover */}
       <Link href={`/book/${slug}`} className="relative aspect-[2/3] w-full rounded-xl overflow-hidden bg-muted shadow-md group-hover:shadow-xl transition-all">
-        {coverUrl ? (
+        {coverUrl && !imgError ? (
           <img
             src={coverUrl}
             alt={title}
+            onError={() => setImgError(true)}
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
             loading="lazy"
           />

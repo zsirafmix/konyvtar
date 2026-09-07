@@ -23,6 +23,7 @@ export default function HomePage() {
     };
   }>({});
   const [loading, setLoading] = useState(true);
+  const [heroImgError, setHeroImgError] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -71,11 +72,17 @@ export default function HomePage() {
               href={`/book/${pick.slug}`}
               className="relative aspect-[2/3] w-40 sm:w-48 flex-shrink-0 rounded-2xl overflow-hidden shadow-2xl transition-transform duration-300 hover:scale-105"
             >
-              {pick.coverUrl ? (
-                <img src={pick.coverUrl} alt={pick.title} className="w-full h-full object-cover" />
+              {pick.coverUrl && !heroImgError ? (
+                <img
+                  src={pick.coverUrl}
+                  alt={pick.title}
+                  onError={() => setHeroImgError(true)}
+                  className="w-full h-full object-cover"
+                />
               ) : (
-                <div className="w-full h-full bg-secondary flex items-center justify-center text-center p-3 font-bold">
-                  {pick.title}
+                <div className="w-full h-full bg-gradient-to-br from-secondary to-muted flex flex-col items-center justify-center text-center p-4">
+                  <span className="font-bold text-sm text-foreground">{pick.title}</span>
+                  <span className="text-xs text-muted-foreground mt-1">{pick.authors?.[0]?.name}</span>
                 </div>
               )}
             </Link>
