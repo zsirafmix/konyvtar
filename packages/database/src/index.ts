@@ -1,5 +1,16 @@
 import { PrismaClient } from "@prisma/client";
 
+export const isDatabaseConfigured = Boolean(
+  process.env.DATABASE_URL &&
+    !process.env.DATABASE_URL.includes("dummy_placeholder") &&
+    !process.env.DATABASE_URL.includes("user:password")
+);
+
+// Fallback placeholder so PrismaClient schema validation never throws on missing env var
+if (!process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = "postgresql://dummy:dummy@localhost:5432/dummy_placeholder";
+}
+
 declare global {
   // eslint-disable-next-line no-var
   var prismaGlobal: PrismaClient | undefined;

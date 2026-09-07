@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@librarian/database";
+import { prisma, isDatabaseConfigured } from "@librarian/database";
 import { generateRecommendations, generateTodaysPick, BookItem, UserHistoryItem } from "@librarian/ai";
 import { getFallbackBookItems } from "@/lib/fallback-books";
 
@@ -9,46 +9,48 @@ export async function GET(req: NextRequest) {
   try {
     let bookItems: BookItem[] = [];
 
-    try {
-      const books = await prisma.book.findMany({
-        include: {
-          authors: { include: { author: true } },
-          categories: { include: { category: true } },
-          tags: { include: { tag: true } },
-          series: { include: { series: true } },
-          editions: {
-            include: {
-              covers: { where: { isPrimary: true }, take: 1 },
+    if (isDatabaseConfigured) {
+      try {
+        const books = await prisma.book.findMany({
+          include: {
+            authors: { include: { author: true } },
+            categories: { include: { category: true } },
+            tags: { include: { tag: true } },
+            series: { include: { series: true } },
+            editions: {
+              include: {
+                covers: { where: { isPrimary: true }, take: 1 },
+              },
+              take: 1,
             },
-            take: 1,
           },
-        },
-      });
+        });
 
-      if (books && books.length > 0) {
-        bookItems = books.map((b: any) => ({
-          id: b.id,
-          title: b.title,
-          slug: b.slug,
-          description: b.description,
-          averageRating: b.averageRating,
-          ratingsCount: b.ratingsCount,
-          authors: (b.authors || []).map((ba: any) => ({ name: ba.author?.name || "Ismeretlen" })),
-          categories: (b.categories || []).map((bc: any) => ({ name: bc.category?.name || "" })),
-          tags: (b.tags || []).map((bt: any) => ({ name: bt.tag?.name || "" })),
-          seriesName: b.series?.[0]?.series?.name,
-          seriesPosition: b.series?.[0]?.position,
-          coverUrl: b.editions?.[0]?.covers?.[0]?.coverUrl || null,
-          distributionStatus: b.editions?.[0]?.distributionStatus || "PRIVATE",
-          libraryReleaseAt: b.editions?.[0]?.libraryReleaseAt || b.createdAt,
-          pages: b.editions?.[0]?.pages || null,
-        }));
+        if (books && books.length > 0) {
+          bookItems = books.map((b: any) => ({
+            id: b.id,
+            title: b.title,
+            slug: b.slug,
+            description: b.description,
+            averageRating: b.averageRating,
+            ratingsCount: b.ratingsCount,
+            authors: (b.authors || []).map((ba: any) => ({ name: ba.author?.name || "Ismeretlen" })),
+            categories: (b.categories || []).map((bc: any) => ({ name: bc.category?.name || "" })),
+            tags: (b.tags || []).map((bt: any) => ({ name: bt.tag?.name || "" })),
+            seriesName: b.series?.[0]?.series?.name,
+            seriesPosition: b.series?.[0]?.position,
+            coverUrl: b.editions?.[0]?.covers?.[0]?.coverUrl || null,
+            distributionStatus: b.editions?.[0]?.distributionStatus || "PRIVATE",
+            libraryReleaseAt: b.editions?.[0]?.libraryReleaseAt || b.createdAt,
+            pages: b.editions?.[0]?.pages || null,
+          }));
+        }
+      } catch (dbErr: any) {
+        console.warn("Prisma query fallback in recommendations:", dbErr.message);
       }
-    } catch (dbErr: any) {
-      console.warn("Prisma lekérdezési hiba a könyvajánlóban, tartalék katalógus használata:", dbErr.message);
     }
 
-    // If DB has no books or is not yet reachable, use curated fallback library
+    // If DB has no books or is not configured, use curated fallback library
     if (bookItems.length === 0) {
       bookItems = getFallbackBookItems();
     }

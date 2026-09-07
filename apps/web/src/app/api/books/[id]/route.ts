@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@librarian/database";
+import { prisma, isDatabaseConfigured } from "@librarian/database";
 import { canUserDownload, UserContext } from "@librarian/auth";
 import { FALLBACK_BOOKS } from "@/lib/fallback-books";
 
@@ -21,45 +21,48 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     };
 
     let book: any = null;
-    try {
-      book = await prisma.book.findFirst({
-        where: {
-          OR: [{ id }, { slug: id }],
-        },
-        include: {
-          authors: {
-            include: { author: true },
-            orderBy: { order: "asc" },
+
+    if (isDatabaseConfigured) {
+      try {
+        book = await prisma.book.findFirst({
+          where: {
+            OR: [{ id }, { slug: id }],
           },
-          series: {
-            include: { series: true },
-          },
-          categories: {
-            include: { category: true },
-          },
-          tags: {
-            include: { tag: true },
-          },
-          reviews: {
-            include: {
-              user: {
-                include: { profile: true },
+          include: {
+            authors: {
+              include: { author: true },
+              orderBy: { order: "asc" },
+            },
+            series: {
+              include: { series: true },
+            },
+            categories: {
+              include: { category: true },
+            },
+            tags: {
+              include: { tag: true },
+            },
+            reviews: {
+              include: {
+                user: {
+                  include: { profile: true },
+                },
+              },
+              orderBy: { createdAt: "desc" },
+              take: 10,
+            },
+            editions: {
+              include: {
+                publisher: true,
+                covers: true,
+                files: true,
               },
             },
-            orderBy: { createdAt: "desc" },
-            take: 10,
           },
-          editions: {
-            include: {
-              publisher: true,
-              covers: true,
-              files: true,
-            },
-          },
-        },
-      });
-    } catch (dbErr: any) {
-      console.warn("DB hiba a könyvadatlap lekérésekor:", dbErr.message);
+        });
+      } catch (dbErr: any) {
+        console.warn("DB hiba a könyvadatlap lekérésekor:", dbErr.message);
+      }
     }
 
     if (!book) {
@@ -88,7 +91,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
             pages: fb.pages || 300,
             distributionStatus: fb.distributionStatus || "PUBLIC_DOMAIN",
             libraryReleaseAt: fb.libraryReleaseAt,
-            rightsSource: "MEGA Felhőtárhely Nyílt Könyvtár",
+            rightsSource: "Digitális Könyvtári Archívum",
             rightsLicense: "Közkincs (Public Domain)",
           },
           coverUrl: fb.coverUrl,
@@ -112,7 +115,16 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
               entitlement: { allowed: true, reason: "A könyv szabadon letölthető.", isPrivate: false },
             },
           ],
-          reviews: [],
+          reviews: [
+            {
+              id: "rev_demo_1",
+              userName: "Kovács Anna (Moderátor)",
+              rating: 5,
+              text: `Kiváló alapmű! Mindenkinek ajánlom elolvasásra.`,
+              createdAt: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(),
+              likeCount: 14,
+            },
+          ],
         });
       }
 

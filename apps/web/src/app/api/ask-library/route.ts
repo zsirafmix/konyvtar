@@ -1,50 +1,64 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@librarian/database";
+import { prisma, isDatabaseConfigured } from "@librarian/database";
 import { queryAskMyLibrary, BookItem } from "@librarian/ai";
+import { getFallbackBookItems } from "@/lib/fallback-books";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { query } = body;
+    const body = await req.json().catch(() => ({}));
+    const query = body.query || body.question;
 
     if (!query || typeof query !== "string" || !query.trim()) {
       return NextResponse.json({ error: "Kérlek adj meg egy kérdést a könyvtáradhoz." }, { status: 400 });
     }
 
-    // Fetch accessible books from database
-    const books = await prisma.book.findMany({
-      include: {
-        authors: { include: { author: true } },
-        categories: { include: { category: true } },
-        tags: { include: { tag: true } },
-        series: { include: { series: true } },
-        editions: {
-          include: {
-            covers: { where: { isPrimary: true }, take: 1 },
-          },
-          take: 1,
-        },
-      },
-    });
+    let bookItems: BookItem[] = [];
 
-    const bookItems: BookItem[] = (books || []).map((b: any) => ({
-      id: b.id,
-      title: b.title,
-      slug: b.slug,
-      description: b.description,
-      averageRating: b.averageRating,
-      ratingsCount: b.ratingsCount,
-      authors: (b.authors || []).map((ba: any) => ({ name: ba.author?.name || "Ismeretlen" })),
-      categories: (b.categories || []).map((bc: any) => ({ name: bc.category?.name || "" })),
-      tags: (b.tags || []).map((bt: any) => ({ name: bt.tag?.name || "" })),
-      seriesName: b.series?.[0]?.series?.name,
-      seriesPosition: b.series?.[0]?.position,
-      coverUrl: b.editions?.[0]?.covers?.[0]?.coverUrl || null,
-      distributionStatus: b.editions?.[0]?.distributionStatus || "PRIVATE",
-      publishedYear: b.editions[0]?.publishedYear || null,
-    }));
+    if (isDatabaseConfigured) {
+      try {
+        const books = await prisma.book.findMany({
+          include: {
+            authors: { include: { author: true } },
+            categories: { include: { category: true } },
+            tags: { include: { tag: true } },
+            series: { include: { series: true } },
+            editions: {
+              include: {
+                covers: { where: { isPrimary: true }, take: 1 },
+              },
+              take: 1,
+            },
+          },
+        });
+
+        if (books && books.length > 0) {
+          bookItems = books.map((b: any) => ({
+            id: b.id,
+            title: b.title,
+            slug: b.slug,
+            description: b.description,
+            averageRating: b.averageRating,
+            ratingsCount: b.ratingsCount,
+            authors: (b.authors || []).map((ba: any) => ({ name: ba.author?.name || "Ismeretlen" })),
+            categories: (b.categories || []).map((bc: any) => ({ name: bc.category?.name || "" })),
+            tags: (b.tags || []).map((bt: any) => ({ name: bt.tag?.name || "" })),
+            seriesName: b.series?.[0]?.series?.name,
+            seriesPosition: b.series?.[0]?.position,
+            coverUrl: b.editions?.[0]?.covers?.[0]?.coverUrl || null,
+            distributionStatus: b.editions?.[0]?.distributionStatus || "PRIVATE",
+            publishedYear: b.editions[0]?.publishedYear || null,
+          }));
+        }
+      } catch (dbErr) {
+        console.warn("Prisma error in ask-library, using fallback catalog:", dbErr);
+      }
+    }
+
+    if (bookItems.length === 0) {
+      bookItems = getFallbackBookItems();
+    }
 
     // Run RAG query grounded in library
     const result = await queryAskMyLibrary(query.trim(), bookItems);
