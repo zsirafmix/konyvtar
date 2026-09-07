@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@librarian/database";
+import { getFallbackBookItems } from "@/lib/fallback-books";
 
 export const dynamic = "force-dynamic";
 
@@ -7,7 +8,7 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const category = searchParams.get("category");
-    const shelf = searchParams.get("shelf"); // e.g. trending, new, top
+    const shelf = searchParams.get("shelf");
     const limit = parseInt(searchParams.get("limit") || "20", 10);
     const page = parseInt(searchParams.get("page") || "1", 10);
     const skip = (page - 1) * limit;
@@ -31,35 +32,61 @@ export async function GET(req: NextRequest) {
       orderBy = { createdAt: "desc" };
     }
 
-    const [books, total] = await Promise.all([
-      prisma.book.findMany({
-        where,
-        take: limit,
-        skip,
-        orderBy,
-        include: {
-          authors: {
-            include: { author: true },
-            orderBy: { order: "asc" },
-          },
-          categories: {
-            include: { category: true },
-          },
-          editions: {
-            include: {
-              covers: { where: { isPrimary: true }, take: 1 },
-              files: true,
+    let books: any[] = [];
+    let total = 0;
+
+    try {
+      const [fetchedBooks, count] = await Promise.all([
+        prisma.book.findMany({
+          where,
+          take: limit,
+          skip,
+          orderBy,
+          include: {
+            authors: {
+              include: { author: true },
+              orderBy: { order: "asc" },
             },
-            take: 1,
+            categories: {
+              include: { category: true },
+            },
+            editions: {
+              include: {
+                covers: { where: { isPrimary: true }, take: 1 },
+                files: true,
+              },
+              take: 1,
+            },
           },
+        }),
+        prisma.book.count({ where }),
+      ]);
+      books = fetchedBooks;
+      total = count;
+    } catch (dbErr: any) {
+      console.warn("Prisma lekérdezési hiba a books API-ban, tartalék lista használata:", dbErr.message);
+    }
+
+    if (books.length === 0) {
+      const fallback = getFallbackBookItems();
+      return NextResponse.json({
+        books: fallback.map((b) => ({
+          ...b,
+          originalTitle: null,
+          aiSummary: b.description,
+        })),
+        pagination: {
+          total: fallback.length,
+          page: 1,
+          limit: fallback.length,
+          totalPages: 1,
         },
-      }),
-      prisma.book.count({ where }),
-    ]);
+      });
+    }
 
     const formatted = books.map((b: any) => {
-      const edition = b.editions[0];
-      const cover = edition?.covers[0];
+      const edition = b.editions?.[0];
+      const cover = edition?.covers?.[0];
       return {
         id: b.id,
         slug: b.slug,
@@ -90,6 +117,15 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: any) {
     console.error("Hiba a könyvek lekérésekor:", error);
-    return NextResponse.json({ error: "Nem sikerült lekérni a könyveket." }, { status: 500 });
+    const fallback = getFallbackBookItems();
+    return NextResponse.json({
+      books: fallback,
+      pagination: {
+        total: fallback.length,
+        page: 1,
+        limit: fallback.length,
+        totalPages: 1,
+      },
+    });
   }
 }

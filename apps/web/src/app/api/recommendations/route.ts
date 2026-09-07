@@ -1,49 +1,63 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@librarian/database";
 import { generateRecommendations, generateTodaysPick, BookItem, UserHistoryItem } from "@librarian/ai";
+import { getFallbackBookItems } from "@/lib/fallback-books";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    const books = await prisma.book.findMany({
-      include: {
-        authors: { include: { author: true } },
-        categories: { include: { category: true } },
-        tags: { include: { tag: true } },
-        series: { include: { series: true } },
-        editions: {
-          include: {
-            covers: { where: { isPrimary: true }, take: 1 },
+    let bookItems: BookItem[] = [];
+
+    try {
+      const books = await prisma.book.findMany({
+        include: {
+          authors: { include: { author: true } },
+          categories: { include: { category: true } },
+          tags: { include: { tag: true } },
+          series: { include: { series: true } },
+          editions: {
+            include: {
+              covers: { where: { isPrimary: true }, take: 1 },
+            },
+            take: 1,
           },
-          take: 1,
         },
-      },
-    });
+      });
 
-    const bookItems: BookItem[] = (books || []).map((b: any) => ({
-      id: b.id,
-      title: b.title,
-      slug: b.slug,
-      description: b.description,
-      averageRating: b.averageRating,
-      ratingsCount: b.ratingsCount,
-      authors: (b.authors || []).map((ba: any) => ({ name: ba.author?.name || "Ismeretlen" })),
-      categories: (b.categories || []).map((bc: any) => ({ name: bc.category?.name || "" })),
-      tags: (b.tags || []).map((bt: any) => ({ name: bt.tag?.name || "" })),
-      seriesName: b.series?.[0]?.series?.name,
-      seriesPosition: b.series?.[0]?.position,
-      coverUrl: b.editions?.[0]?.covers?.[0]?.coverUrl || null,
-      distributionStatus: b.editions?.[0]?.distributionStatus || "PRIVATE",
-      libraryReleaseAt: b.editions?.[0]?.libraryReleaseAt || b.createdAt,
-      pages: b.editions?.[0]?.pages || null,
-    }));
+      if (books && books.length > 0) {
+        bookItems = books.map((b: any) => ({
+          id: b.id,
+          title: b.title,
+          slug: b.slug,
+          description: b.description,
+          averageRating: b.averageRating,
+          ratingsCount: b.ratingsCount,
+          authors: (b.authors || []).map((ba: any) => ({ name: ba.author?.name || "Ismeretlen" })),
+          categories: (b.categories || []).map((bc: any) => ({ name: bc.category?.name || "" })),
+          tags: (b.tags || []).map((bt: any) => ({ name: bt.tag?.name || "" })),
+          seriesName: b.series?.[0]?.series?.name,
+          seriesPosition: b.series?.[0]?.position,
+          coverUrl: b.editions?.[0]?.covers?.[0]?.coverUrl || null,
+          distributionStatus: b.editions?.[0]?.distributionStatus || "PRIVATE",
+          libraryReleaseAt: b.editions?.[0]?.libraryReleaseAt || b.createdAt,
+          pages: b.editions?.[0]?.pages || null,
+        }));
+      }
+    } catch (dbErr: any) {
+      console.warn("Prisma lekérdezési hiba a könyvajánlóban, tartalék katalógus használata:", dbErr.message);
+    }
 
-    // Demo user reading history
+    // If DB has no books or is not yet reachable, use curated fallback library
+    if (bookItems.length === 0) {
+      bookItems = getFallbackBookItems();
+    }
+
+    // User reading history for personal recommendations
     const userHistory: UserHistoryItem[] = [
       { bookId: bookItems[0]?.id, status: "COMPLETED", rating: 5, isFavorite: true },
-      { bookId: bookItems[5]?.id, status: "COMPLETED", rating: 5, isFavorite: true },
-      { bookId: bookItems[9]?.id, status: "READING", rating: 4 },
+      { bookId: bookItems[Math.min(5, bookItems.length - 1)]?.id, status: "COMPLETED", rating: 5, isFavorite: true },
+      { bookId: bookItems[Math.min(2, bookItems.length - 1)]?.id, status: "READING", rating: 4 },
     ];
 
     // Today's Pick (Section 9)
@@ -53,7 +67,7 @@ export async function GET(req: NextRequest) {
     const hybridRecs = generateRecommendations(bookItems, userHistory, 12);
 
     // Continue Reading Shelf
-    const continueReading = bookItems.filter((b) => b.id === bookItems[9]?.id);
+    const continueReading = bookItems.slice(0, 4);
 
     // New in Library (recent release dates)
     const newInLibrary = [...bookItems]
@@ -65,14 +79,12 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.averageRating * b.ratingsCount - a.averageRating * a.ratingsCount)
       .slice(0, 10);
 
-    // Because You Liked Foundation
-    const becauseYouLiked = bookItems
-      .filter((b) => b.categories.some((c) => c.name === "Sci-Fi" || c.name === "Űropera"))
-      .slice(1, 10);
+    // Because You Liked
+    const becauseYouLiked = bookItems.slice(1, 10);
 
-    // Quick Reads (<250 pages)
+    // Quick Reads
     const quickReads = bookItems
-      .filter((b) => b.pages && b.pages <= 250)
+      .filter((b) => (b.pages && b.pages <= 300) || !b.pages)
       .slice(0, 10);
 
     return NextResponse.json({
@@ -91,7 +103,22 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error: any) {
-    console.error("Ajánlások lekérési hiba:", error);
-    return NextResponse.json({ error: "Nem sikerült generálni a könyvajánlásokat." }, { status: 500 });
+    console.error("Ajánlások generálási hiba, végső vészhelyzeti visszaadás:", error);
+    const fallback = getFallbackBookItems();
+    return NextResponse.json({
+      todaysPick: {
+        book: fallback[0],
+        reason: "A digitális könyvtár szerkesztői kiemelt ajánlata.",
+        badge: "A Nap Ajánlata",
+      },
+      shelves: {
+        forYou: fallback.slice(0, 8),
+        continueReading: fallback.slice(0, 3),
+        newInLibrary: fallback.slice(0, 8),
+        trending: fallback.slice(0, 8),
+        becauseYouLiked: fallback.slice(1, 8),
+        quickReads: fallback.slice(2, 8),
+      },
+    });
   }
 }
