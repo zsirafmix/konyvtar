@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma, isDatabaseConfigured } from "@librarian/database";
 import { generateDeterministicEmbedding, cosineSimilarity } from "@librarian/ai";
 import { FALLBACK_BOOKS } from "@/lib/fallback-books";
+import { searchMegaBooks, toBookCard } from "@/lib/mega-catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -52,8 +53,9 @@ export async function GET(req: NextRequest) {
         };
       }
 
-      // 2. Keyword fallback search
-      const matchedBooks = FALLBACK_BOOKS.filter((b) => {
+      // 2. Keyword fallback search across 11,472 Calibre books
+      const megaMatched = searchMegaBooks(trimmed, 40).map(toBookCard);
+      const matchedBooks = megaMatched.length > 0 ? megaMatched : FALLBACK_BOOKS.filter((b) => {
         const matchTitle = b.title.toLowerCase().includes(trimmed);
         const matchAuthor = b.authors.some((a) => a.name.toLowerCase().includes(trimmed));
         const matchCategory = b.categories.some((c) => c.name.toLowerCase().includes(trimmed));
@@ -65,14 +67,14 @@ export async function GET(req: NextRequest) {
 
       // Extract authors
       const authorsMap = new Map<string, { id: string; name: string; bio: string }>();
-      FALLBACK_BOOKS.forEach((b) => {
+      matchedBooks.forEach((b) => {
         b.authors.forEach((a) => {
           if (!authorsMap.has(a.name) && (type === "all" || type === "authors")) {
-            if (a.name.toLowerCase().includes(trimmed)) {
+            if (a.name.toLowerCase().includes(trimmed) || trimmed.length <= 3) {
               authorsMap.set(a.name, {
                 id: `auth_${a.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}`,
                 name: a.name,
-                bio: `A(z) ${b.title} és más neves művek szerzője.`,
+                bio: `A(z) ${b.title} és más neves művek szerzője a Calibre felhőkönyvtárban.`,
               });
             }
           }

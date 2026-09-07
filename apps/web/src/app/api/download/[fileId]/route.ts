@@ -247,9 +247,8 @@ export async function GET(req: NextRequest, { params }: { params: { fileId: stri
       membershipStatus,
     };
 
-    // 1. Check if downloading a fallback book
-    if (fileId.startsWith("file_fb_") || !isDatabaseConfigured) {
-      // Find book matching this file id or extract from id
+    // 1. Check if downloading a fallback sample book
+    if (fileId.startsWith("file_fb_")) {
       const matchedBook =
         FALLBACK_BOOKS.find((b) => fileId.includes(b.id) || fileId.includes(b.slug)) ||
         FALLBACK_BOOKS[0];
@@ -271,7 +270,48 @@ export async function GET(req: NextRequest, { params }: { params: { fileId: stri
       });
     }
 
-    // 2. Fetch fileAsset from database
+    // 2. Stream real book directly from MEGA cloud repository
+    try {
+      const megaProvider = defaultStorageManager.getProvider("mega") as any;
+      const fileExists = await megaProvider.exists(fileId);
+      if (fileExists) {
+        const meta = await megaProvider.getMetadata(fileId);
+        const stream = await megaProvider.getFileStream(fileId);
+
+        const chunks: Buffer[] = [];
+        for await (const chunk of stream) {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        }
+        const fileBuffer = Buffer.concat(chunks);
+
+        return new NextResponse(new Uint8Array(fileBuffer), {
+          headers: {
+            "Content-Disposition": `attachment; filename="${encodeURIComponent(meta.fileName)}"`,
+            "Content-Type": meta.mimeType,
+            "Content-Length": fileBuffer.length.toString(),
+            "Cache-Control": "private, no-cache, no-store, must-revalidate",
+          },
+        });
+      }
+    } catch (megaErr) {
+      console.warn("Nem sikerült elérni a MEGA streamet a(z) " + fileId + " fájlhoz:", megaErr);
+    }
+
+    // 3. If database is not configured and not in MEGA, fallback
+    if (!isDatabaseConfigured) {
+      const matchedBook = FALLBACK_BOOKS[0];
+      const epubBuffer = generateEpubBuffer(matchedBook);
+      return new NextResponse(new Uint8Array(epubBuffer), {
+        headers: {
+          "Content-Disposition": `attachment; filename="${encodeURIComponent(matchedBook.title)}.epub"`,
+          "Content-Type": "application/epub+zip",
+          "Content-Length": epubBuffer.length.toString(),
+          "Cache-Control": "private, no-cache, no-store, must-revalidate",
+        },
+      });
+    }
+
+    // 4. Fetch fileAsset from database
     const fileAsset = await prisma.fileAsset.findUnique({
       where: { id: fileId },
       include: {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma, isDatabaseConfigured } from "@librarian/database";
 import { canUserDownload, UserContext } from "@librarian/auth";
 import { FALLBACK_BOOKS } from "@/lib/fallback-books";
+import { getMegaBookDetail } from "@/lib/mega-catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +67,11 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     }
 
     if (!book) {
+      const megaDetail = getMegaBookDetail(id);
+      if (megaDetail) {
+        return NextResponse.json(megaDetail);
+      }
+
       const fb = FALLBACK_BOOKS.find((b) => b.id === id || b.slug === id);
       if (fb) {
         return NextResponse.json({

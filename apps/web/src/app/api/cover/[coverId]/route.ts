@@ -19,7 +19,7 @@ export async function GET(req: NextRequest, { params }: { params: { coverId: str
     }
     const buffer = Buffer.concat(chunks);
 
-    return new NextResponse(buffer, {
+    return new NextResponse(new Uint8Array(buffer), {
       headers: {
         "Content-Type": "image/jpeg",
         "Content-Length": buffer.length.toString(),

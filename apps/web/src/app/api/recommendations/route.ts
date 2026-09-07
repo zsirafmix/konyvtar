@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma, isDatabaseConfigured } from "@librarian/database";
 import { generateRecommendations, generateTodaysPick, BookItem, UserHistoryItem } from "@librarian/ai";
 import { getFallbackBookItems } from "@/lib/fallback-books";
+import { getRecommendedMegaShelves } from "@/lib/mega-catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -50,9 +51,10 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // If DB has no books or is not configured, use curated fallback library
+    // If DB has no books or is not configured, serve rich 11,472 Calibre MEGA library
     if (bookItems.length === 0) {
-      bookItems = getFallbackBookItems();
+      const megaData = getRecommendedMegaShelves();
+      return NextResponse.json(megaData);
     }
 
     // User reading history for personal recommendations

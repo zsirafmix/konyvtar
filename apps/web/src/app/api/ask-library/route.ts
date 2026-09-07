@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma, isDatabaseConfigured } from "@librarian/database";
 import { queryAskMyLibrary, BookItem } from "@librarian/ai";
 import { getFallbackBookItems } from "@/lib/fallback-books";
+import { searchMegaBooks, toBookCard } from "@/lib/mega-catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +58,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (bookItems.length === 0) {
-      bookItems = getFallbackBookItems();
+      const megaMatches = searchMegaBooks(query, 30).map((b) => ({
+        ...toBookCard(b),
+        categories: [{ name: "Könyv" }],
+        tags: [{ name: b.author }],
+      }));
+      bookItems = [...megaMatches, ...getFallbackBookItems()];
     }
 
     // Run RAG query grounded in library

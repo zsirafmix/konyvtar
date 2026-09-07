@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, isDatabaseConfigured } from "@librarian/database";
 import { getFallbackBookItems } from "@/lib/fallback-books";
+import { getAllMegaBooks, toBookCard } from "@/lib/mega-catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -69,26 +70,25 @@ export async function GET(req: NextRequest) {
     }
 
     if (books.length === 0) {
-      let fallback = getFallbackBookItems();
+      const megaBooks = getAllMegaBooks();
+      let filtered = megaBooks;
 
       if (category && category !== "all") {
         const normCat = category.toLowerCase().replace(/[^a-z0-9]/g, "");
-        fallback = fallback.filter((b) =>
-          b.categories.some((c) => c.name.toLowerCase().replace(/[^a-z0-9]/g, "").includes(normCat))
+        filtered = filtered.filter((b) =>
+          b.title.toLowerCase().includes(normCat) || b.author.toLowerCase().includes(normCat)
         );
       }
 
+      const paginated = filtered.slice(skip, skip + limit);
+
       return NextResponse.json({
-        books: fallback.map((b) => ({
-          ...b,
-          originalTitle: null,
-          aiSummary: b.description,
-        })),
+        books: paginated.map(toBookCard),
         pagination: {
-          total: fallback.length,
-          page: 1,
-          limit: fallback.length,
-          totalPages: 1,
+          total: filtered.length,
+          page,
+          limit,
+          totalPages: Math.ceil(filtered.length / limit),
         },
       });
     }
