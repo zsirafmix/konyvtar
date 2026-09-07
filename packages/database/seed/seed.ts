@@ -13,6 +13,12 @@ function hashPassword(password: string): string {
 async function main() {
   console.log("🌱 Starting Librarian AI database seeding...");
 
+  const existingUsers = await prisma.user.count();
+  if (existingUsers > 0 && process.env.FORCE_SEED !== "true") {
+    console.log(`ℹ️ Az adatbázis már tartalmaz adatokat (${existingUsers} felhasználó). A seeder átugrásra került az adatok megőrzése érdekében.`);
+    return;
+  }
+
   // 1. Clean existing records in reverse dependency order
   console.log("🧹 Clearing old seed data...");
   await prisma.notification.deleteMany({});

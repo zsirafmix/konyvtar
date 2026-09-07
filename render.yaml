@@ -1,10 +1,10 @@
 services:
   - type: web
     name: librarian-web
-    env: node
-    plan: starter
+    runtime: node
+    plan: free
     region: frankfurt
-    buildCommand: npm install && npm run db:generate && npm run db:push -- --accept-data-loss && npm run db:seed && npm run build
+    buildCommand: npm install && npm run db:generate && npm run db:push && npm run db:seed && npm run build
     startCommand: npm run start --workspace=@librarian/web
     envVars:
       - key: DATABASE_URL
@@ -24,7 +24,7 @@ services:
 
 databases:
   - name: librarian-postgres
-    plan: starter
+    plan: free
     region: frankfurt
     databaseName: librarian_db
     user: librarian

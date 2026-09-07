@@ -6,7 +6,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "db:generate": "prisma generate",
-    "db:push": "prisma db push",
+    "db:push": "prisma db push --accept-data-loss",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx seed/seed.ts",
     "build": "tsc -b",
