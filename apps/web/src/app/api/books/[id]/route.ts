@@ -102,16 +102,16 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       language: book.language,
       averageRating: book.averageRating,
       ratingsCount: book.ratingsCount,
-      authors: book.authors.map((ba) => ({ id: ba.author.id, name: ba.author.name })),
-      series: book.series[0]
+      authors: (book.authors || []).map((ba: any) => ({ id: ba.author?.id || ba.id, name: ba.author?.name || "Ismeretlen" })),
+      series: (book as any).series?.[0]
         ? {
-            id: book.series[0].series.id,
-            name: book.series[0].series.name,
-            position: book.series[0].position,
+            id: (book as any).series[0].series?.id,
+            name: (book as any).series[0].series?.name,
+            position: (book as any).series[0].position,
           }
         : null,
-      categories: book.categories.map((bc) => ({ id: bc.category.id, name: bc.category.name, slug: bc.category.slug })),
-      tags: book.tags.map((bt) => ({ id: bt.tag.id, name: bt.tag.name })),
+      categories: (book.categories || []).map((bc: any) => ({ id: bc.category?.id || bc.id, name: bc.category?.name || "", slug: bc.category?.slug || "" })),
+      tags: (book.tags || []).map((bt: any) => ({ id: bt.tag?.id || bt.id, name: bt.tag?.name || "" })),
       edition: edition
         ? {
             id: edition.id,
@@ -128,10 +128,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         : null,
       coverUrl: primaryCover?.coverUrl || null,
       files: filesWithEntitlement,
-      reviews: book.reviews.map((r) => ({
+      reviews: (book.reviews || []).map((r: any) => ({
         id: r.id,
-        userName: r.user.profile?.displayName || "Névtelen olvasó",
-        userAvatar: r.user.profile?.avatarUrl,
+        userName: r.user?.profile?.displayName || "Névtelen olvasó",
+        userAvatar: r.user?.profile?.avatarUrl,
         rating: r.rating,
         text: r.text,
         spoiler: r.spoiler,

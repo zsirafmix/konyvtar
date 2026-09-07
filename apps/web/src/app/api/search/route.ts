@@ -41,8 +41,8 @@ export async function GET(req: NextRequest) {
         },
       });
 
-      const scored = allBooks.map((b) => {
-        const text = `${b.title} ${b.originalTitle || ""} ${b.description || ""} ${b.aiSummary || ""} ${b.authors.map((a) => a.author.name).join(" ")} ${b.categories.map((c) => c.category.name).join(" ")} ${b.tags.map((t) => t.tag.name).join(" ")}`;
+      const scored = (allBooks || []).map((b: any) => {
+        const text = `${b.title} ${b.originalTitle || ""} ${b.description || ""} ${b.aiSummary || ""} ${(b.authors || []).map((a: any) => a.author?.name || "").join(" ")} ${(b.categories || []).map((c: any) => c.category?.name || "").join(" ")} ${(b.tags || []).map((t: any) => t.tag?.name || "").join(" ")}`;
         const bookVector = generateDeterministicEmbedding(text);
         const similarity = cosineSimilarity(queryVector, bookVector);
 
@@ -53,10 +53,10 @@ export async function GET(req: NextRequest) {
           description: b.description,
           aiSummary: b.aiSummary,
           averageRating: b.averageRating,
-          authors: b.authors.map((ba) => ({ name: ba.author.name })),
-          categories: b.categories.map((bc) => ({ name: bc.category.name })),
-          coverUrl: b.editions[0]?.covers[0]?.coverUrl || null,
-          distributionStatus: b.editions[0]?.distributionStatus || "PRIVATE",
+          authors: (b.authors || []).map((ba: any) => ({ name: ba.author?.name || "Ismeretlen" })),
+          categories: (b.categories || []).map((bc: any) => ({ name: bc.category?.name || "" })),
+          coverUrl: b.editions?.[0]?.covers?.[0]?.coverUrl || null,
+          distributionStatus: b.editions?.[0]?.distributionStatus || "PRIVATE",
           similarityScore: parseFloat(similarity.toFixed(4)),
         };
       });
@@ -161,22 +161,22 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       query: trimmed,
       isSemantic: false,
-      books: books.map((b) => ({
+      books: (books || []).map((b: any) => ({
         id: b.id,
         slug: b.slug,
         title: b.title,
         description: b.description,
         aiSummary: b.aiSummary,
         averageRating: b.averageRating,
-        authors: b.authors.map((ba) => ({ name: ba.author.name })),
-        categories: b.categories.map((bc) => ({ name: bc.category.name })),
-        coverUrl: b.editions[0]?.covers[0]?.coverUrl || null,
-        distributionStatus: b.editions[0]?.distributionStatus || "PRIVATE",
+        authors: (b.authors || []).map((ba: any) => ({ name: ba.author?.name || "Ismeretlen" })),
+        categories: (b.categories || []).map((bc: any) => ({ name: bc.category?.name || "" })),
+        coverUrl: b.editions?.[0]?.covers?.[0]?.coverUrl || null,
+        distributionStatus: b.editions?.[0]?.distributionStatus || "PRIVATE",
       })),
-      authors: authors.map((a) => ({ id: a.id, name: a.name, bio: a.bio })),
-      series: seriesList.map((s) => ({ id: s.id, name: s.name, description: s.description })),
-      lists: bookLists.map((l) => ({ id: l.id, title: l.title, likeCount: l.likeCount })),
-      users: users.map((u) => ({ id: u.userId, displayName: u.displayName, avatarUrl: u.avatarUrl })),
+      authors: (authors || []).map((a: any) => ({ id: a.id, name: a.name, bio: a.bio })),
+      series: (seriesList || []).map((s: any) => ({ id: s.id, name: s.name, description: s.description })),
+      lists: (bookLists || []).map((l: any) => ({ id: l.id, title: l.title, likeCount: l.likeCount })),
+      users: (users || []).map((u: any) => ({ id: u.userId, displayName: u.displayName, avatarUrl: u.avatarUrl })),
     });
   } catch (error: any) {
     console.error("Keresési hiba:", error);

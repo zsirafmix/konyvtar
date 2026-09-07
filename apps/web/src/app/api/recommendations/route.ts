@@ -21,22 +21,22 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const bookItems: BookItem[] = books.map((b) => ({
+    const bookItems: BookItem[] = (books || []).map((b: any) => ({
       id: b.id,
       title: b.title,
       slug: b.slug,
       description: b.description,
       averageRating: b.averageRating,
       ratingsCount: b.ratingsCount,
-      authors: b.authors.map((ba) => ({ name: ba.author.name })),
-      categories: b.categories.map((bc) => ({ name: bc.category.name })),
-      tags: b.tags.map((bt) => ({ name: bt.tag.name })),
-      seriesName: b.series[0]?.series.name,
-      seriesPosition: b.series[0]?.position,
-      coverUrl: b.editions[0]?.covers[0]?.coverUrl || null,
-      distributionStatus: b.editions[0]?.distributionStatus || "PRIVATE",
-      libraryReleaseAt: b.editions[0]?.libraryReleaseAt || b.createdAt,
-      pages: b.editions[0]?.pages || null,
+      authors: (b.authors || []).map((ba: any) => ({ name: ba.author?.name || "Ismeretlen" })),
+      categories: (b.categories || []).map((bc: any) => ({ name: bc.category?.name || "" })),
+      tags: (b.tags || []).map((bt: any) => ({ name: bt.tag?.name || "" })),
+      seriesName: b.series?.[0]?.series?.name,
+      seriesPosition: b.series?.[0]?.position,
+      coverUrl: b.editions?.[0]?.covers?.[0]?.coverUrl || null,
+      distributionStatus: b.editions?.[0]?.distributionStatus || "PRIVATE",
+      libraryReleaseAt: b.editions?.[0]?.libraryReleaseAt || b.createdAt,
+      pages: b.editions?.[0]?.pages || null,
     }));
 
     // Demo user reading history

@@ -14,14 +14,14 @@ export async function GET() {
       },
     });
 
-    const formatted = editions.map((ed) => ({
+    const formatted = editions.map((ed: any) => ({
       id: ed.id,
-      bookTitle: ed.book.title,
+      bookTitle: ed.book?.title || "Ismeretlen",
       distributionStatus: ed.distributionStatus,
       rightsSource: ed.rightsSource || "Nincs megadva",
       rightsLicense: ed.rightsLicense || "Nincs megadva",
       libraryReleaseAt: ed.libraryReleaseAt,
-      filesCount: ed.files.length,
+      filesCount: ed.files?.length || 0,
     }));
 
     return NextResponse.json({ editions: formatted });

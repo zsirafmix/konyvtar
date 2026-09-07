@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
       prisma.book.count({ where }),
     ]);
 
-    const formatted = books.map((b) => {
+    const formatted = books.map((b: any) => {
       const edition = b.editions[0];
       const cover = edition?.covers[0];
       return {
@@ -69,8 +69,8 @@ export async function GET(req: NextRequest) {
         aiSummary: b.aiSummary,
         averageRating: b.averageRating,
         ratingsCount: b.ratingsCount,
-        authors: b.authors.map((ba) => ({ name: ba.author.name })),
-        categories: b.categories.map((bc) => ({ name: bc.category.name, slug: bc.category.slug })),
+        authors: (b.authors || []).map((ba: any) => ({ name: ba.author?.name || "Ismeretlen" })),
+        categories: (b.categories || []).map((bc: any) => ({ name: bc.category?.name || "", slug: bc.category?.slug || "" })),
         coverUrl: cover?.coverUrl || null,
         distributionStatus: edition?.distributionStatus || "PRIVATE",
         libraryReleaseAt: edition?.libraryReleaseAt || b.createdAt,
