@@ -63,6 +63,23 @@ librarian-ai/
 
 ## 4. Telepítés és Indítás
 
+### 🚀 Telepítés Renderre (1-kattintásos Blueprint)
+A projekt tartalmazza a hivatalos `render.yaml` specifikációt, így a Render felületén másodpercek alatt elindítható:
+
+1. Nyisd meg a [Render Dashboard](https://dashboard.render.com)-ot.
+2. Kattints a **New +** gombra a jobb felső sarokban, majd válaszd a **Blueprint** lehetőséget.
+3. Csatlakoztasd a repository-t: `zsirafmix/konyvtar`.
+4. A Render automatikusan:
+   * Létrehozza a Frankfurt (EU) régiós felügyelt **PostgreSQL** adatbázist (`librarian-postgres`).
+   * Létrehozza a **Node.js Web Service**-t (`librarian-web`).
+   * Összekapcsolja a `DATABASE_URL` és `AUTH_SECRET` változókat.
+   * Lefuttatja az inicializálást (`prisma db push`, mintaadatok seedelése és Next.js build).
+5. Az üzembe helyezés végeztével a rendszer azonnal elérhető a Render által adott nyilvános URL-en (pl. `https://librarian-web.onrender.com`).
+
+---
+
+### Helyi Futtatás Dockerrel
+
 ### Előfeltételek
 * Node.js v20+ vagy v24+
 * Docker és Docker Compose
