@@ -1,0 +1,714 @@
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  USER
+  MODERATOR
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum MembershipStatus {
+  FREE
+  SUPPORTER
+}
+
+enum DistributionStatus {
+  PRIVATE
+  PUBLIC_DOMAIN
+  LICENSED
+  CREATOR_AUTHORIZED
+  RESTRICTED
+}
+
+enum ReadingStatusType {
+  WANT_TO_READ
+  READING
+  COMPLETED
+  PAUSED
+  ABANDONED
+}
+
+enum FileFormat {
+  EPUB
+  PDF
+  MOBI
+  AZW3
+  FB2
+  TXT
+  DJVU
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum ListVisibility {
+  PRIVATE
+  UNLISTED
+  PUBLIC
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String
+  role          Role      @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  profile             UserProfile?
+  memberships         Membership[]
+  readingStatuses     ReadingStatus[]
+  ratings             Rating[]
+  reviews             Review[]
+  reviewLikes         ReviewLike[]
+  reviewComments      ReviewComment[]
+  bookNotes           UserBookNote[]
+  favorites           Favorite[]
+  bookLists           BookList[]
+  following           UserFollow[]        @relation("UserFollowing")
+  followers           UserFollow[]        @relation("UserFollowers")
+  clubMemberships     BookClubMember[]
+  ownedClubs          BookClub[]          @relation("ClubOwner")
+  discussions         Discussion[]
+  discussionComments  DiscussionComment[]
+  recommendations     Recommendation[]
+  downloadLogs        DownloadLog[]
+  importJobs          ImportJob[]
+  auditLogs           AuditLog[]
+  notifications       Notification[]
+  editionsOwned       BookEdition[]       @relation("EditionOwner")
+
+  @@map("users")
+}
+
+model UserProfile {
+  id                      String   @id @default(uuid())
+  userId                  String   @unique
+  displayName             String
+  bio                     String?
+  avatarUrl               String?
+  isSupporterBadgeVisible Boolean  @default(true)
+  isProfilePublic         Boolean  @default(true)
+  isLibraryPublic         Boolean  @default(false)
+  favoriteGenres          String[] @default([])
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+model Membership {
+  id                     String           @id @default(uuid())
+  userId                 String
+  status                 MembershipStatus @default(FREE)
+  startedAt              DateTime         @default(now())
+  expiresAt              DateTime?
+  provider               String?          @default("stripe")
+  providerSubscriptionId String?
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@map("memberships")
+}
+
+model Book {
+  id             String   @id @default(uuid())
+  title          String
+  originalTitle  String?
+  slug           String   @unique
+  description    String?
+  aiSummary      String?
+  language       String   @default("hu")
+  averageRating  Float    @default(0.0)
+  ratingsCount   Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  editions        BookEdition[]
+  authors         BookAuthor[]
+  series          BookSeries[]
+  categories      BookCategory[]
+  tags            BookTag[]
+  readingStatuses ReadingStatus[]
+  ratings         Rating[]
+  reviews         Review[]
+  notes           UserBookNote[]
+  favorites       Favorite[]
+  listItems       BookListItem[]
+  clubCurrentIn   BookClub[]       @relation("ClubCurrentBook")
+  recommendations Recommendation[]
+  embeddings      Embedding[]
+  downloadLogs    DownloadLog[]
+
+  @@index([title])
+  @@index([averageRating])
+  @@map("books")
+}
+
+model BookEdition {
+  id                 String             @id @default(uuid())
+  bookId             String
+  publisherId        String?
+  publishedYear      Int?
+  isbn10             String?
+  isbn13             String?
+  pages              Int?
+  format             FileFormat         @default(EPUB)
+  distributionStatus DistributionStatus @default(PRIVATE)
+  libraryReleaseAt   DateTime           @default(now())
+  rightsSource       String?
+  rightsLicense      String?
+  rightsNotes        String?
+  ownerUserId        String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  book        Book         @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  publisher   Publisher?   @relation(fields: [publisherId], references: [id], onDelete: SetNull)
+  owner       User?        @relation("EditionOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  files       FileAsset[]
+  covers      Cover[]
+
+  @@index([bookId])
+  @@index([isbn13])
+  @@index([distributionStatus])
+  @@map("book_editions")
+}
+
+model Author {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  bio       String?
+  imageUrl  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  books BookAuthor[]
+
+  @@map("authors")
+}
+
+model BookAuthor {
+  id        String   @id @default(uuid())
+  bookId    String
+  authorId  String
+  role      String   @default("author")
+  order     Int      @default(0)
+
+  book   Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  author Author @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@unique([bookId, authorId])
+  @@map("book_authors")
+}
+
+model Series {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  books BookSeries[]
+
+  @@map("series")
+}
+
+model BookSeries {
+  id        String @id @default(uuid())
+  bookId    String
+  seriesId  String
+  position  Float  @default(1.0)
+
+  book   Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  series Series @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+
+  @@unique([bookId, seriesId])
+  @@index([seriesId, position])
+  @@map("book_series")
+}
+
+model Publisher {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  country   String?
+  website   String?
+  createdAt DateTime @default(now())
+
+  editions BookEdition[]
+
+  @@map("publishers")
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  description String?
+  parentId    String?
+  createdAt   DateTime @default(now())
+
+  parent   Category?      @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children Category[]     @relation("CategoryHierarchy")
+  books    BookCategory[]
+
+  @@map("categories")
+}
+
+model BookCategory {
+  id         String @id @default(uuid())
+  bookId     String
+  categoryId String
+
+  book     Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([bookId, categoryId])
+  @@map("book_categories")
+}
+
+model Tag {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  books BookTag[]
+
+  @@map("tags")
+}
+
+model BookTag {
+  id     String @id @default(uuid())
+  bookId String
+  tagId  String
+
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([bookId, tagId])
+  @@map("book_tags")
+}
+
+model StorageProvider {
+  id                   String   @id @default(uuid())
+  name                 String   @unique // mega, local, s3
+  credentialsEncrypted String?
+  isActive             Boolean  @default(true)
+  settings             Json?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  files FileAsset[]
+
+  @@map("storage_providers")
+}
+
+model FileAsset {
+  id                String             @id @default(uuid())
+  editionId         String
+  storageProviderId String
+  fileKey           String
+  fileName          String
+  fileSizeBytes     BigInt
+  mimeType          String
+  sha256Hash        String
+  qualityScore      Float              @default(1.0)
+  distributionStatus DistributionStatus @default(PRIVATE)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  edition         BookEdition      @relation(fields: [editionId], references: [id], onDelete: Cascade)
+  storageProvider StorageProvider  @relation(fields: [storageProviderId], references: [id], onDelete: Restrict)
+  downloadLogs    DownloadLog[]
+
+  @@index([sha256Hash])
+  @@index([editionId])
+  @@map("file_assets")
+}
+
+model Cover {
+  id              String   @id @default(uuid())
+  editionId       String
+  coverSource     String   // epub_embedded, openlibrary, google_books, custom, placeholder
+  coverConfidence Float    @default(1.0)
+  coverUrl        String
+  coverCachedPath String?
+  isPrimary       Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  edition BookEdition @relation(fields: [editionId], references: [id], onDelete: Cascade)
+
+  @@index([editionId])
+  @@map("covers")
+}
+
+model ReadingStatus {
+  id              String            @id @default(uuid())
+  userId          String
+  bookId          String
+  status          ReadingStatusType @default(WANT_TO_READ)
+  progressPercent Int               @default(0)
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  updatedAt       DateTime          @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bookId])
+  @@index([userId, status])
+  @@map("reading_statuses")
+}
+
+model Rating {
+  id        String   @id @default(uuid())
+  userId    String
+  bookId    String
+  value     Int      // 1 to 5
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bookId])
+  @@index([bookId])
+  @@map("ratings")
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  userId    String
+  bookId    String
+  rating    Int?
+  text      String
+  spoiler   Boolean  @default(false)
+  likeCount Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book     Book            @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  likes    ReviewLike[]
+  comments ReviewComment[]
+
+  @@unique([userId, bookId])
+  @@index([bookId])
+  @@map("reviews")
+}
+
+model ReviewLike {
+  id        String   @id @default(uuid())
+  userId    String
+  reviewId  String
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, reviewId])
+  @@map("review_likes")
+}
+
+model ReviewComment {
+  id        String   @id @default(uuid())
+  userId    String
+  reviewId  String
+  text      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@map("review_comments")
+}
+
+model UserBookNote {
+  id        String   @id @default(uuid())
+  userId    String
+  bookId    String
+  note      String
+  isPrivate Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bookId])
+  @@map("user_book_notes")
+}
+
+model Favorite {
+  id        String   @id @default(uuid())
+  userId    String
+  bookId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bookId])
+  @@map("favorites")
+}
+
+model UserFollow {
+  id          String   @id @default(uuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@map("user_follows")
+}
+
+model BookList {
+  id          String         @id @default(uuid())
+  userId      String
+  title       String
+  description String?
+  visibility  ListVisibility @default(PUBLIC)
+  likeCount   Int            @default(0)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items BookListItem[]
+
+  @@map("book_lists")
+}
+
+model BookListItem {
+  id       String   @id @default(uuid())
+  listId   String
+  bookId   String
+  position Int      @default(0)
+  note     String?
+  addedAt  DateTime @default(now())
+
+  list BookList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  book Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([listId, bookId])
+  @@index([listId, position])
+  @@map("book_list_items")
+}
+
+model BookClub {
+  id          String   @id @default(uuid())
+  ownerId     String
+  name        String
+  description String?
+  avatarUrl   String?
+  isPrivate   Boolean  @default(false)
+  currentBookId String?
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner       User             @relation("ClubOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  currentBook Book?            @relation("ClubCurrentBook", fields: [currentBookId], references: [id], onDelete: SetNull)
+  members     BookClubMember[]
+  discussions Discussion[]
+
+  @@map("book_clubs")
+}
+
+model BookClubMember {
+  id       String   @id @default(uuid())
+  clubId   String
+  userId   String
+  role     String   @default("member") // owner, moderator, member
+  joinedAt DateTime @default(now())
+
+  club BookClub @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([clubId, userId])
+  @@map("book_club_members")
+}
+
+model Discussion {
+  id        String   @id @default(uuid())
+  clubId    String
+  userId    String
+  title     String
+  content   String
+  isSpoiler Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  club     BookClub            @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comments DiscussionComment[]
+
+  @@map("discussions")
+}
+
+model DiscussionComment {
+  id           String   @id @default(uuid())
+  discussionId String
+  userId       String
+  content      String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  discussion Discussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("discussion_comments")
+}
+
+model Recommendation {
+  id              String   @id @default(uuid())
+  userId          String
+  bookId          String
+  score           Float
+  reason          String
+  algorithmSource String   // content_based, collaborative, semantic, series, serendipity
+  createdAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@index([userId, score])
+  @@map("recommendations")
+}
+
+model Embedding {
+  id        String   @id @default(uuid())
+  bookId    String
+  vector    Float[]  // pgvector representation or JSON float array
+  model     String   @default("text-embedding-3-small")
+  createdAt DateTime @default(now())
+
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@index([bookId])
+  @@map("embeddings")
+}
+
+model DownloadLog {
+  id             String   @id @default(uuid())
+  userId         String
+  bookId         String
+  fileId         String
+  ipHash         String
+  membershipType String   // FREE, SUPPORTER
+  downloadedAt   DateTime @default(now())
+
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  file FileAsset @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@index([userId, downloadedAt])
+  @@map("download_logs")
+}
+
+model ImportJob {
+  id             String    @id @default(uuid())
+  userId         String
+  status         JobStatus @default(PENDING)
+  totalFiles     Int       @default(0)
+  processedFiles Int       @default(0)
+  stage          String?
+  errorLog       String?
+  startedAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  user  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items ImportItem[]
+
+  @@map("import_jobs")
+}
+
+model ImportItem {
+  id            String    @id @default(uuid())
+  jobId         String
+  filePath      String
+  fileName      String
+  format        String
+  sha256Hash    String?
+  status        JobStatus @default(PENDING)
+  errorMessage  String?
+  detectedTitle String?
+  detectedAuthor String?
+  confidence    Float?
+  createdAt     DateTime  @default(now())
+
+  job         ImportJob            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  suggestions MetadataSuggestion[]
+
+  @@map("import_items")
+}
+
+model MetadataSuggestion {
+  id               String   @id @default(uuid())
+  importItemId     String
+  field            String   // title, author, series, year
+  suggestedValue   String
+  confidenceScore  Float
+  source           String   // regex, openlibrary, google_books, llm
+  isReviewed       Boolean  @default(false)
+  isApproved       Boolean?
+  createdAt        DateTime @default(now())
+
+  importItem ImportItem @relation(fields: [importItemId], references: [id], onDelete: Cascade)
+
+  @@index([isReviewed, confidenceScore])
+  @@map("metadata_suggestions")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  action     String   // DOWNLOAD_BOOK, EDIT_RIGHTS, APPROVE_METADATA, USER_ROLE_CHANGE
+  resource   String
+  resourceId String?
+  details    Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([action, createdAt])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String   // NEW_FOLLOWER, REVIEW_LIKE, BOOK_AVAILABLE, CLUB_ACTIVITY, SUPPORTER_EXPIRING
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  linkUrl   String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}

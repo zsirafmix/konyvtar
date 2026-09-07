@@ -1,0 +1,1 @@
+{"root":["./src/duplicate-detector.ts","./src/embeddings.ts","./src/index.ts","./src/metadata-extractor.ts","./src/rag.ts","./src/recommender.ts","./src/external-providers/googlebooks.provider.ts","./src/external-providers/openlibrary.provider.ts","./src/external-providers/provider.interface.ts"],"version":"5.9.3"}

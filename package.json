@@ -1,0 +1,23 @@
+{
+  "name": "librarian-ai-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Librarian AI - Modern, AI-alapú digitális könyvtár és közösségi platform",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=@librarian/web",
+    "build": "npm run build --workspaces --if-present",
+    "start": "npm run start --workspace=@librarian/web",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "db:generate": "npm run db:generate --workspace=@librarian/database",
+    "db:push": "npm run db:push --workspace=@librarian/database",
+    "db:seed": "npm run db:seed --workspace=@librarian/database"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}
