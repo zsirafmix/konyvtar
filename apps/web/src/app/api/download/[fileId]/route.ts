@@ -172,6 +172,66 @@ function generateEpubBuffer(book: any): Buffer {
   ]);
 }
 
+function generatePdfBuffer(book: any): Buffer {
+  const authorName = book.authors?.map((a: any) => a.name).join(", ") || "Ismeretlen szerző";
+  const title = book.title || "Könyv";
+  const description = (book.description || "").substring(0, 300);
+
+  const clean = (str: string) => (str || "").replace(/[^\x20-\x7E]/g, " ").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+  const cTitle = clean(title);
+  const cAuthor = clean(authorName);
+  const cDesc = clean(description);
+
+  const streamContent = [
+    "BT",
+    "/F1 22 Tf",
+    "50 720 Td",
+    `(${cTitle}) Tj`,
+    "/F1 14 Tf",
+    "0 -30 Td",
+    `(${cAuthor}) Tj`,
+    "/F1 10 Tf",
+    "0 -25 Td",
+    "(Digitalis Konyvtari Kiadas - Librarian AI) Tj",
+    "0 -30 Td",
+    `(${cDesc}) Tj`,
+    "0 -40 Td",
+    "(1. Fejezet) Tj",
+    "/F1 11 Tf",
+    "0 -20 Td",
+    "(A teljes mu elerheto a Librarian AI digitalis olvasoplatformjan.) Tj",
+    "ET",
+  ].join("\n");
+
+  const streamLen = Buffer.byteLength(streamContent, "utf8");
+
+  const objects = [
+    { num: 1, content: "<< /Type /Catalog /Pages 2 0 R >>" },
+    { num: 2, content: "<< /Type /Pages /Kids [3 0 R] /Count 1 >>" },
+    { num: 3, content: "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>" },
+    { num: 4, content: "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>" },
+    { num: 5, content: `<< /Length ${streamLen} >>\nstream\n${streamContent}\nendstream` },
+  ];
+
+  let body = "%PDF-1.4\n";
+  const offsets: number[] = [];
+
+  for (const obj of objects) {
+    offsets.push(Buffer.byteLength(body, "utf8"));
+    body += `${obj.num} 0 obj\n${obj.content}\nendobj\n`;
+  }
+
+  const startXref = Buffer.byteLength(body, "utf8");
+  let xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets) {
+    xref += String(offset).padStart(10, "0") + " 00000 n \n";
+  }
+
+  const trailer = `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${startXref}\n%%EOF\n`;
+
+  return Buffer.from(body + xref + trailer, "utf8");
+}
+
 export async function GET(req: NextRequest, { params }: { params: { fileId: string } }) {
   try {
     const { fileId } = params;
@@ -199,13 +259,13 @@ export async function GET(req: NextRequest, { params }: { params: { fileId: stri
       const mimeType = isEpub ? "application/epub+zip" : "application/pdf";
       const fileName = `${matchedBook.title} - ${matchedBook.authors[0]?.name || "Ismeretlen"}.${ext}`;
 
-      const epubBuffer = generateEpubBuffer(matchedBook);
+      const fileBuffer = isEpub ? generateEpubBuffer(matchedBook) : generatePdfBuffer(matchedBook);
 
-      return new NextResponse(new Uint8Array(epubBuffer), {
+      return new NextResponse(new Uint8Array(fileBuffer), {
         headers: {
           "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"`,
           "Content-Type": mimeType,
-          "Content-Length": epubBuffer.length.toString(),
+          "Content-Length": fileBuffer.length.toString(),
           "Cache-Control": "private, no-cache, no-store, must-revalidate",
         },
       });

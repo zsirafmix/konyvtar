@@ -30,7 +30,7 @@ export const FALLBACK_BOOKS: BookItem[] = [
     tags: [{ name: "öszvér" }, { name: "galaxis" }, { name: "pszichológia" }],
     averageRating: 4.7,
     ratingsCount: 1120,
-    coverUrl: "https://images.unsplash.com/photo-1532012164546-f432f2e3777f?w=600&auto=format&fit=crop&q=80",
+    coverUrl: "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80",
     publishedYear: 1952,
     pages: 247,
     seriesName: "Alapítvány",

@@ -167,7 +167,7 @@ export const SEED_BOOKS: SeedBook[] = [
     tags: ["öszvér", "hari seldon", "galaxis", "mutáns"],
     description: "Az Alapítvány szembekerül a hajdani dicső Birodalom megmaradt haderejével, majd egy váratlan mutáns, az Öszvér bukkan fel, aki képes az emberi érzelmek manipulálására.",
     aiSummary: "AI Elemzés: Seldon determinisztikus terve összecsap az egyéni, kaotikus akarattal. Az Öszvér karaktere a sci-fi történelem egyik legemlékezetesebb antagonistája.",
-    coverUrl: "https://images.unsplash.com/photo-1532012164546-f432f2e3777f?w=600&auto=format&fit=crop&q=80",
+    coverUrl: "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80",
     averageRating: 4.7,
     ratingsCount: 1120,
     distributionStatus: "PUBLIC_DOMAIN",
