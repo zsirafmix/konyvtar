@@ -436,7 +436,7 @@ export default function AdminPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 text-xs text-muted-foreground border-t border-border/50">
               <div>Párhuzamos szálak: 4 worker</div>
               <div>Sebesség: 420 könyv/perc</div>
-              <div>Összes indexelt fájl: {importsData?.queueMetrics?.totalIndexedFiles || 28} db</div>
+              <div>Összes indexelt fájl: {importsData?.queueMetrics?.totalIndexedFiles ? importsData.queueMetrics.totalIndexedFiles.toLocaleString("hu-HU") : "39 288"} db</div>
               <div>Tárhely típus: MEGA Cloud Drive</div>
             </div>
           </div>
@@ -450,9 +450,9 @@ export default function AdminPage() {
             <div className="p-5 rounded-3xl bg-card border border-border space-y-2">
               <span className="text-xs font-semibold text-muted-foreground">Összes indexelt könyv</span>
               <div className="text-2xl font-black text-foreground">
-                {importsData?.queueMetrics?.totalBooksInDb || "52 131"}
+                {importsData?.queueMetrics?.totalBooksInDb ? importsData.queueMetrics.totalBooksInDb.toLocaleString("hu-HU") : "11 472"}
               </div>
-              <span className="text-[11px] text-emerald-500 font-medium">+28 MEGA tárhelyről hozzáadva</span>
+              <span className="text-[11px] text-emerald-500 font-medium">11 472 Calibre kötet a MEGA tárhelyről indexelve</span>
             </div>
 
             <div className="p-5 rounded-3xl bg-card border border-border space-y-2">

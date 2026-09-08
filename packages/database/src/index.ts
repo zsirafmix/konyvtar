@@ -3,7 +3,12 @@ import { PrismaClient } from "@prisma/client";
 export const isDatabaseConfigured = Boolean(
   process.env.DATABASE_URL &&
     !process.env.DATABASE_URL.includes("dummy_placeholder") &&
-    !process.env.DATABASE_URL.includes("user:password")
+    !process.env.DATABASE_URL.includes("user:password") &&
+    !(
+      (process.env.RENDER === "true" || process.env.NODE_ENV === "production") &&
+      process.env.DATABASE_URL.includes("localhost") &&
+      !process.env.FORCE_LOCAL_DB
+    )
 );
 
 // Fallback placeholder so PrismaClient schema validation never throws on missing env var

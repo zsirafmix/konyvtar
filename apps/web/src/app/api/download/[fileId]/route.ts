@@ -233,6 +233,16 @@ function generatePdfBuffer(book: any): Buffer {
   return Buffer.from(body + xref + trailer, "utf8");
 }
 
+function makeContentDisposition(fileName: string): string {
+  const asciiFallback = fileName
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\x20-\x7E]/g, "_")
+    .replace(/["\\]/g, "");
+  const utf8Encoded = encodeURIComponent(fileName);
+  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${utf8Encoded}`;
+}
+
 export async function GET(req: NextRequest, { params }: { params: { fileId: string } }) {
   try {
     const { fileId } = params;
@@ -263,7 +273,7 @@ export async function GET(req: NextRequest, { params }: { params: { fileId: stri
 
       return new NextResponse(new Uint8Array(fileBuffer), {
         headers: {
-          "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"`,
+          "Content-Disposition": makeContentDisposition(fileName),
           "Content-Type": mimeType,
           "Content-Length": fileBuffer.length.toString(),
           "Cache-Control": "private, no-cache, no-store, must-revalidate",
@@ -271,13 +281,13 @@ export async function GET(req: NextRequest, { params }: { params: { fileId: stri
       });
     }
 
-    // 2. Stream real book directly from MEGA cloud repository
+    // 2. Stream real book directly from MEGA cloud repository or Calibre format index
+    const formatInfo = findFormatById(fileId);
     try {
       const megaProvider = defaultStorageManager.getProvider("mega") as any;
       const fileExists = await megaProvider.exists(fileId);
-      if (fileExists) {
+      if (fileExists || formatInfo) {
         const meta = await megaProvider.getMetadata(fileId);
-        const formatInfo = findFormatById(fileId);
         const fileName = formatInfo?.name || meta.fileName || `${fileId}`;
         const mimeType = formatInfo ? getMimeType(formatInfo.name) : meta.mimeType;
 
@@ -289,17 +299,44 @@ export async function GET(req: NextRequest, { params }: { params: { fileId: stri
         }
         const fileBuffer = Buffer.concat(chunks);
 
-        return new NextResponse(new Uint8Array(fileBuffer), {
-          headers: {
-            "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"`,
-            "Content-Type": mimeType,
-            "Content-Length": fileBuffer.length.toString(),
-            "Cache-Control": "private, no-cache, no-store, must-revalidate",
-          },
-        });
+        // Check that the returned stream is not the fallback plain text message
+        const isFallbackText =
+          fileBuffer.length < 500 &&
+          fileBuffer.toString("utf8").startsWith("Librarian AI - MEGA Cloud Storage");
+
+        if (!isFallbackText && fileBuffer.length > 0) {
+          return new NextResponse(new Uint8Array(fileBuffer), {
+            headers: {
+              "Content-Disposition": makeContentDisposition(fileName),
+              "Content-Type": mimeType,
+              "Content-Length": fileBuffer.length.toString(),
+              "Cache-Control": "private, no-cache, no-store, must-revalidate",
+            },
+          });
+        }
       }
     } catch (megaErr) {
       console.warn("Nem sikerült elérni a MEGA streamet a(z) " + fileId + " fájlhoz:", megaErr);
+    }
+
+    // 2.b If stream had an issue but formatInfo is known from Calibre index, synthesize valid format buffer
+    if (formatInfo && formatInfo.book) {
+      const isPdf = formatInfo.format.toUpperCase() === "PDF";
+      const fileBuffer = isPdf
+        ? generatePdfBuffer(formatInfo.book)
+        : generateEpubBuffer(formatInfo.book);
+      const mimeType = isPdf ? "application/pdf" : "application/epub+zip";
+      const ext = isPdf ? "pdf" : "epub";
+      const fileName = `${formatInfo.book.title} - ${formatInfo.book.author}.${ext}`;
+
+      return new NextResponse(new Uint8Array(fileBuffer), {
+        headers: {
+          "Content-Disposition": makeContentDisposition(fileName),
+          "Content-Type": mimeType,
+          "Content-Length": fileBuffer.length.toString(),
+          "Cache-Control": "private, no-cache, no-store, must-revalidate",
+        },
+      });
     }
 
     // 3. If database is not configured and not in MEGA, fallback
@@ -308,7 +345,7 @@ export async function GET(req: NextRequest, { params }: { params: { fileId: stri
       const epubBuffer = generateEpubBuffer(matchedBook);
       return new NextResponse(new Uint8Array(epubBuffer), {
         headers: {
-          "Content-Disposition": `attachment; filename="${encodeURIComponent(matchedBook.title)}.epub"`,
+          "Content-Disposition": makeContentDisposition(`${matchedBook.title}.epub`),
           "Content-Type": "application/epub+zip",
           "Content-Length": epubBuffer.length.toString(),
           "Cache-Control": "private, no-cache, no-store, must-revalidate",
@@ -412,7 +449,7 @@ export async function GET(req: NextRequest, { params }: { params: { fileId: stri
 
       return new NextResponse(new Uint8Array(buffer), {
         headers: {
-          "Content-Disposition": `attachment; filename="${encodeURIComponent(fileAsset.fileName)}"`,
+          "Content-Disposition": makeContentDisposition(fileAsset.fileName),
           "Content-Type": fileAsset.mimeType,
           "Content-Length": buffer.length.toString(),
           "Cache-Control": "private, no-cache, no-store, must-revalidate",
@@ -432,7 +469,7 @@ export async function GET(req: NextRequest, { params }: { params: { fileId: stri
     const epubBuffer = generateEpubBuffer(matchedBook);
     return new NextResponse(new Uint8Array(epubBuffer), {
       headers: {
-        "Content-Disposition": `attachment; filename="${encodeURIComponent(matchedBook.title)}.epub"`,
+        "Content-Disposition": makeContentDisposition(`${matchedBook.title}.epub`),
         "Content-Type": "application/epub+zip",
       },
     });

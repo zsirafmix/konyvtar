@@ -341,13 +341,13 @@ export class MegaStorageProvider implements StorageProvider {
    * Directly streams the real binary file from the live MEGA shared folder!
    */
   async getFileStream(fileKey: string): Promise<Readable> {
-    if (!this.isTreeLoaded && !this.keyToFileMap.has(fileKey)) {
-      await this.loadLibrary();
-    }
-
-    // Try direct lookup by raw key or sanitized key
     const cleanKey = fileKey.replace(/^mega:/, "");
-    const liveFile = this.keyToFileMap.get(fileKey) || this.keyToFileMap.get(cleanKey);
+    let liveFile = this.keyToFileMap.get(fileKey) || this.keyToFileMap.get(cleanKey);
+
+    if (!liveFile && !this.isTreeLoaded) {
+      await this.loadLibrary();
+      liveFile = this.keyToFileMap.get(fileKey) || this.keyToFileMap.get(cleanKey);
+    }
 
     if (liveFile && typeof liveFile.download === "function") {
       try {
@@ -413,10 +413,16 @@ export class MegaStorageProvider implements StorageProvider {
   }
 
   async exists(fileKey: string): Promise<boolean> {
-    if (!this.isTreeLoaded && !this.keyToFileMap.has(fileKey)) {
+    const cleanKey = fileKey.replace(/^mega:/, "");
+    if (!this.isTreeLoaded && !this.keyToFileMap.has(fileKey) && !this.keyToFileMap.has(cleanKey)) {
       await this.loadLibrary();
     }
-    return this.keyToFileMap.has(fileKey) || this.virtualFiles.has(fileKey);
+    return (
+      this.keyToFileMap.has(fileKey) ||
+      this.keyToFileMap.has(cleanKey) ||
+      this.virtualFiles.has(fileKey) ||
+      this.virtualFiles.has(cleanKey)
+    );
   }
 
   async getChecksum(fileKey: string): Promise<string> {

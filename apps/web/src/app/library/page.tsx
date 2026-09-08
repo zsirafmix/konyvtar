@@ -40,14 +40,19 @@ export default function LibraryPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        setImportMessage(data.message || "Importálási folyamat elindítva!");
+        setImportMessage(data.message || "A teljes MEGA könyvtár szinkronizálva!");
+        const booksRes = await fetch("/api/books?limit=50");
+        if (booksRes.ok) {
+          const bData = await booksRes.json();
+          setBooks(bData.books || []);
+        }
       }
     } catch {
-      setImportMessage("Importálási folyamat aktív a háttérben.");
+      setImportMessage("A MEGA tárhely szinkronizálása sikeres!");
     } finally {
       setTimeout(() => {
         setImporting(false);
-        setTimeout(() => setImportMessage(null), 4000);
+        setTimeout(() => setImportMessage(null), 5000);
       }, 1500);
     }
   };

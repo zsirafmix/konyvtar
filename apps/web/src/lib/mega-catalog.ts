@@ -144,8 +144,57 @@ function guessMimeType(filename: string): string {
   }
 }
 
-// Pre-process and index books in memory
-const allBooks: MegaBookRecord[] = (rawMegaBooks as unknown as MegaBookRecord[]) || [];
+function getBookPriorityScore(x: MegaBookRecord): number {
+  let score = 0;
+  if (x.coverId) score += 1000;
+  const author = x.author.toLowerCase();
+  if (
+    author.includes("rejto") || author.includes("rejtő") ||
+    author.includes("asimov") ||
+    author.includes("christie") ||
+    author.includes("herbert") ||
+    author.includes("orwell") ||
+    author.includes("verne") ||
+    author.includes("gardonyi") || author.includes("gárdonyi") ||
+    author.includes("jokai") || author.includes("jókai") ||
+    author.includes("king") ||
+    author.includes("bradbury") ||
+    author.includes("clarke") ||
+    author.includes("lem") ||
+    author.includes("dick") ||
+    author.includes("tolkien") ||
+    author.includes("mikszath") || author.includes("mikszáth") ||
+    author.includes("moricz") || author.includes("móricz") ||
+    author.includes("karinthy") ||
+    author.includes("lawrence") ||
+    author.includes("marquez") ||
+    author.includes("merle") ||
+    author.includes("huxley") ||
+    author.includes("hemingway") ||
+    author.includes("dumas") ||
+    author.includes("stoker") ||
+    author.includes("shelley") ||
+    author.includes("poe") ||
+    author.includes("doyle")
+  ) {
+    score += 500;
+  }
+  if (
+    author === "2000" ||
+    author === "100 ev termese" ||
+    author.startsWith("2000 -") ||
+    /^\d{4}/.test(author) ||
+    x.title.toLowerCase().startsWith("erotikus viccek")
+  ) {
+    score -= 2000;
+  }
+  score += Math.min(x.formats.length * 10, 50);
+  return score;
+}
+
+// Pre-process, sort by priority (renowned authors + real covers first)
+const rawList: MegaBookRecord[] = (rawMegaBooks as unknown as MegaBookRecord[]) || [];
+const allBooks: MegaBookRecord[] = [...rawList].sort((a, b) => getBookPriorityScore(b) - getBookPriorityScore(a));
 
 // Fast map by ID, by slug, and by format file ID
 const bookById = new Map<string, MegaBookRecord>();
@@ -242,52 +291,160 @@ export function toBookCard(b: MegaBookRecord) {
   };
 }
 
+function findCuratedBook(authorQuery: string, titleQuery?: string): MegaBookRecord | undefined {
+  const aq = authorQuery.toLowerCase();
+  const tq = titleQuery ? titleQuery.toLowerCase() : "";
+
+  if (tq) {
+    // 1. Exact title match
+    const exact = allBooks.find((x) =>
+      x.author.toLowerCase().includes(aq) &&
+      x.title.toLowerCase() === tq &&
+      x.coverId &&
+      x.formats.length > 0
+    );
+    if (exact) return exact;
+
+    // 2. Title starts with
+    const prefix = allBooks.find((x) =>
+      x.author.toLowerCase().includes(aq) &&
+      x.title.toLowerCase().startsWith(tq) &&
+      x.coverId &&
+      x.formats.length > 0
+    );
+    if (prefix) return prefix;
+  }
+
+  // 3. Substring match
+  return allBooks.find((x) =>
+    x.author.toLowerCase().includes(aq) &&
+    (!tq || x.title.toLowerCase().includes(tq)) &&
+    x.coverId &&
+    x.formats.length > 0
+  );
+}
+
+const DAILY_FEATURED_PICKS = [
+  { author: "Frank Herbert", title: "Dune", badge: "A NAP KIEMELT AJÁNLATA", reason: "Frank Herbert monumentális sci-fi mesterműve az Arrakis bolygó és az emberi civilizáció sorsáról. Kihagyhatatlan klasszikus a könyvtárban." },
+  { author: "Rejto Jeno", title: "Tizennegy", badge: "A NAP KIEMELT AJÁNLATA", reason: "Rejtő Jenő utánozhatatlan humorú, megunhatatlan remekműve Gorcsev Ivánnal és a legendás tizennégy karátos autóval." },
+  { author: "George Orwell", title: "1984", badge: "A NAP KIEMELT AJÁNLATA", reason: "George Orwell felkavaró disztópiája a hatalom természetéről és az egyéni szabadságról, amely ma időszerűbb, mint valaha." },
+  { author: "Isaac Asimov", title: "Csillagok", badge: "A NAP KIEMELT AJÁNLATA", reason: "Isaac Asimov lenyűgöző Alapítvány- és Birodalom-univerzumának egyik legizgalmasabb regénye a zsarnokság elleni küzdelemről." },
+  { author: "Agatha Christie", title: "Orient", badge: "A NAP KIEMELT AJÁNLATA", reason: "Hercule Poirot leghíresebb és legbriliánsabb nyomozása a hótorlaszban rekedt luxusvonaton." },
+  { author: "Gardonyi Geza", title: "csillagok", badge: "A NAP KIEMELT AJÁNLATA", reason: "A magyar irodalom legnagyobb történelmi regénye Bornemissza Gergelyről és az egri vár dicsőséges védőiről." },
+  { author: "Jules Verne", title: "80 nap", badge: "A NAP KIEMELT AJÁNLATA", reason: "Phileas Fogg és Passepartout felejthetetlen világkörüli kalandja, amely generációk képzeletét ragadta magával." },
+];
+
 export function getRecommendedMegaShelves() {
   const candidatesWithCovers = allBooks.filter((b) => b.coverId && b.formats.length > 0);
 
-  const byAuthor = new Map<string, MegaBookRecord[]>();
-  for (const b of candidatesWithCovers) {
-    if (!byAuthor.has(b.author)) {
-      byAuthor.set(b.author, []);
-    }
-    byAuthor.get(b.author)!.push(b);
-  }
-
-  const pickAuthor = byAuthor.get("Rejto Jeno") || byAuthor.get("Isaac Asimov") || [];
-  const pick = pickAuthor[0] || candidatesWithCovers[0] || allBooks[0];
+  // Deterministic daily pick based on day of month
+  const pickIndex = new Date().getDate() % DAILY_FEATURED_PICKS.length;
+  const featuredConfig = DAILY_FEATURED_PICKS[pickIndex];
+  const pick = findCuratedBook(featuredConfig.author, featuredConfig.title) || candidatesWithCovers[0] || allBooks[0];
 
   const todaysPick = {
     book: toBookCard(pick),
-    reason: `A személyes ízlésed és a magyar olvasóközösség visszajelzései alapján ${pick.author} ezen klasszikusa páratlan stílusával és lebilincselő cselekményével azonnal magával ragad.`,
-    badge: "A NAP KIEMELT AJÁNLATA",
+    reason: featuredConfig.reason,
+    badge: featuredConfig.badge,
   };
 
-  const getShelfBooks = (authorList: string[], fallbackOffset: number = 0, count: number = 8) => {
+  const resolveShelf = (specs: Array<[string, string]>, fallbackOffset: number, count: number = 8) => {
     const list: MegaBookRecord[] = [];
-    for (const a of authorList) {
-      const books = byAuthor.get(a) || [];
-      if (books.length > 0) {
-        list.push(books[Math.floor(Math.random() * books.length)]);
+    const usedIds = new Set<string>();
+
+    for (const [author, title] of specs) {
+      const b = findCuratedBook(author, title);
+      if (b && !usedIds.has(b.id)) {
+        list.push(b);
+        usedIds.add(b.id);
       }
     }
+
     if (list.length < count) {
-      const extra = candidatesWithCovers.slice(fallbackOffset, fallbackOffset + count);
-      for (const e of extra) {
-        if (!list.some((b) => b.id === e.id)) list.push(e);
+      for (let i = fallbackOffset; i < candidatesWithCovers.length && list.length < count; i++) {
+        const candidate = candidatesWithCovers[i];
+        if (!usedIds.has(candidate.id)) {
+          list.push(candidate);
+          usedIds.add(candidate.id);
+        }
       }
     }
+
     return list.slice(0, count).map(toBookCard);
   };
 
   return {
     todaysPick,
     shelves: {
-      forYou: getShelfBooks(["Isaac Asimov", "Rejto Jeno", "Agatha Christie", "Ray Bradbury", "Jules Verne", "Frank Herbert", "Philip K. Dick", "Stephen King"], 10, 8),
-      continueReading: getShelfBooks(["Leslie L. Lawrence", "Jokai Mor", "Gardonyi Geza", "Moldova Gyorgy"], 30, 6),
-      newInLibrary: candidatesWithCovers.slice(50, 60).map(toBookCard),
-      trending: getShelfBooks(["Rejto Jeno", "Agatha Christie", "Isaac Asimov", "Stephen King", "Galaktika", "Jules Verne"], 70, 8),
-      becauseYouLiked: getShelfBooks(["Isaac Asimov", "Frank Herbert", "Ray Bradbury", "Philip K. Dick", "Galaktika"], 90, 8),
-      quickReads: getShelfBooks(["Rejto Jeno", "Agatha Christie", "Moldova Gyorgy", "Ray Bradbury"], 120, 8),
+      // 1. NEKED AJÁNLJUK: Masterpieces across genres
+      forYou: resolveShelf([
+        ["Frank Herbert", "Dune"],
+        ["Rejto Jeno", "Tizennegy"],
+        ["Isaac Asimov", "Csillagok"],
+        ["Agatha Christie", "Orient"],
+        ["George Orwell", "1984"],
+        ["Jules Verne", "80 nap"],
+        ["Gardonyi Geza", "csillagok"],
+        ["Stephen King", "11_22_63"],
+      ], 0, 8),
+
+      // 2. OLVASÁS FOLYTATÁSA: Famous adventure & historical classics
+      continueReading: resolveShelf([
+        ["Leslie L. Lawrence", "kigyoja"],
+        ["Jokai Mor", "arany"],
+        ["Mikszath Kalman", "fekete"],
+        ["Karinthy Frigyes", "Capillaria"],
+        ["Arthur C. Clarke", "2001"],
+        ["Stanislaw Lem", "Legyozhetetlen"],
+      ], 15, 6),
+
+      // 3. ÚJDONSÁGOK A KÖNYVTÁRBAN: Acclaimed literary works
+      newInLibrary: resolveShelf([
+        ["Tolkien", "Gyuru"],
+        ["Bradbury", "Mars"],
+        ["Philip K. Dick", "Scanner"],
+        ["Jokai Mor", "koszivu"],
+        ["Rejto Jeno", "Piszkos Fred"],
+        ["Agatha Christie", "neger"],
+        ["Isaac Asimov", "robotjai"],
+        ["Gardonyi Geza", "kapitany"],
+      ], 30, 8),
+
+      // 4. NÉPSZERŰ A KÖZÖSSÉGBEN: The most celebrated classics
+      trending: resolveShelf([
+        ["George Orwell", "1984"],
+        ["Frank Herbert", "Dune"],
+        ["Rejto Jeno", "Piszkos Fred"],
+        ["Agatha Christie", "neger"],
+        ["Jules Verne", "80 nap"],
+        ["Stephen King", "11_22_63"],
+        ["Gardonyi Geza", "csillagok"],
+        ["Jokai Mor", "arany"],
+      ], 45, 8),
+
+      // 5. MIVEL TETSZETT A SCI-FI: Pure sci-fi greatness
+      becauseYouLiked: resolveShelf([
+        ["Frank Herbert", "Dune"],
+        ["Isaac Asimov", "Csillagok"],
+        ["Isaac Asimov", "robotjai"],
+        ["Arthur C. Clarke", "2001"],
+        ["Stanislaw Lem", "Legyozhetetlen"],
+        ["Philip K. Dick", "Scanner"],
+        ["Bradbury", "Mars"],
+        ["George Orwell", "1984"],
+      ], 60, 8),
+
+      // 6. GYORS OLVASMÁNYOK: Fast-paced novellas and humorous adventures
+      quickReads: resolveShelf([
+        ["Rejto Jeno", "Tizennegy"],
+        ["Rejto Jeno", "Piszkos Fred"],
+        ["Karinthy Frigyes", "Capillaria"],
+        ["Agatha Christie", "Orient"],
+        ["Gardonyi Geza", "kapitany"],
+        ["Leslie L. Lawrence", "kigyoja"],
+        ["Jules Verne", "80 nap"],
+        ["Arthur C. Clarke", "2001"],
+      ], 75, 8),
     },
   };
 }

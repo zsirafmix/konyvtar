@@ -31,6 +31,7 @@ export default function BookDetailPage({ params }: { params: { slug: string } })
   const [userNote, setUserNote] = useState<string>("");
   const [noteSaved, setNoteSaved] = useState<boolean>(false);
   const [imgError, setImgError] = useState<boolean>(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadBook() {
@@ -263,10 +264,15 @@ export default function BookDetailPage({ params }: { params: { slug: string } })
                 {isAllowed ? (
                   <a
                     href={`/api/download/${file.id}`}
-                    className="px-3.5 py-1.5 rounded-full bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-opacity flex items-center gap-1.5"
+                    download={file.fileName || `${book.title}.${file.format.toLowerCase()}`}
+                    onClick={() => {
+                      setDownloadingId(file.id);
+                      setTimeout(() => setDownloadingId(null), 4000);
+                    }}
+                    className="px-3.5 py-1.5 rounded-full bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-opacity flex items-center gap-1.5 shadow-sm"
                   >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Letöltés</span>
+                    <Download className={`w-3.5 h-3.5 ${downloadingId === file.id ? "animate-bounce" : ""}`} />
+                    <span>{downloadingId === file.id ? "Letöltés indítása..." : "Letöltés"}</span>
                   </a>
                 ) : (
                   <button
