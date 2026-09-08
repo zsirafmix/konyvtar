@@ -147,9 +147,10 @@ function guessMimeType(filename: string): string {
 // Pre-process and index books in memory
 const allBooks: MegaBookRecord[] = (rawMegaBooks as unknown as MegaBookRecord[]) || [];
 
-// Fast map by ID and by slug
+// Fast map by ID, by slug, and by format file ID
 const bookById = new Map<string, MegaBookRecord>();
 const bookBySlug = new Map<string, MegaBookRecord>();
+const formatById = new Map<string, { name: string; format: string; size: number; id: string; book: MegaBookRecord }>();
 
 for (const b of allBooks) {
   bookById.set(b.id, b);
@@ -158,6 +159,17 @@ for (const b of allBooks) {
     bookById.set(`mega_${b.calibreId}`, b);
   }
   bookBySlug.set(b.slug, b);
+  for (const f of b.formats) {
+    formatById.set(f.id, { ...f, book: b });
+  }
+}
+
+export function findFormatById(fileId: string) {
+  return formatById.get(fileId);
+}
+
+export function getMimeType(filename: string): string {
+  return guessMimeType(filename);
 }
 
 export function getAllMegaBooks(): MegaBookRecord[] {

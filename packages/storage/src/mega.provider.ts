@@ -300,24 +300,40 @@ export class MegaStorageProvider implements StorageProvider {
       await this.loadLibrary();
     }
 
-    const item = this.virtualFiles.get(fileKey);
-    if (!item) {
-      const name = fileKey.split("/").pop() || fileKey;
+    const cleanKey = fileKey.replace(/^mega:/, "");
+    const item =
+      this.virtualFiles.get(fileKey) ||
+      this.virtualFiles.get(`mega:${cleanKey}`) ||
+      this.virtualFiles.get(cleanKey);
+
+    if (item) {
       return {
-        fileKey,
-        fileName: name,
-        fileSizeBytes: 1048576,
-        mimeType: this.guessMimeType(name),
-        sha256Hash: createHash("sha256").update(fileKey).digest("hex"),
+        fileKey: item.fileKey,
+        fileName: item.fileName,
+        fileSizeBytes: item.size,
+        mimeType: item.mime,
+        sha256Hash: item.hash,
       };
     }
 
+    const liveFile = this.keyToFileMap.get(fileKey) || this.keyToFileMap.get(cleanKey);
+    if (liveFile && liveFile.name) {
+      return {
+        fileKey,
+        fileName: liveFile.name,
+        fileSizeBytes: Number(liveFile.size || 0),
+        mimeType: this.guessMimeType(liveFile.name),
+        sha256Hash: cleanKey,
+      };
+    }
+
+    const name = fileKey.split("/").pop() || fileKey;
     return {
-      fileKey: item.fileKey,
-      fileName: item.fileName,
-      fileSizeBytes: item.size,
-      mimeType: item.mime,
-      sha256Hash: item.hash,
+      fileKey,
+      fileName: name,
+      fileSizeBytes: 1048576,
+      mimeType: this.guessMimeType(name),
+      sha256Hash: createHash("sha256").update(fileKey).digest("hex"),
     };
   }
 

@@ -4,6 +4,7 @@ import { prisma, isDatabaseConfigured } from "@librarian/database";
 import { canUserDownload, UserContext } from "@librarian/auth";
 import { defaultStorageManager } from "@librarian/storage";
 import { FALLBACK_BOOKS } from "@/lib/fallback-books";
+import { findFormatById, getMimeType } from "@/lib/mega-catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -276,6 +277,10 @@ export async function GET(req: NextRequest, { params }: { params: { fileId: stri
       const fileExists = await megaProvider.exists(fileId);
       if (fileExists) {
         const meta = await megaProvider.getMetadata(fileId);
+        const formatInfo = findFormatById(fileId);
+        const fileName = formatInfo?.name || meta.fileName || `${fileId}`;
+        const mimeType = formatInfo ? getMimeType(formatInfo.name) : meta.mimeType;
+
         const stream = await megaProvider.getFileStream(fileId);
 
         const chunks: Buffer[] = [];
@@ -286,8 +291,8 @@ export async function GET(req: NextRequest, { params }: { params: { fileId: stri
 
         return new NextResponse(new Uint8Array(fileBuffer), {
           headers: {
-            "Content-Disposition": `attachment; filename="${encodeURIComponent(meta.fileName)}"`,
-            "Content-Type": meta.mimeType,
+            "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"`,
+            "Content-Type": mimeType,
             "Content-Length": fileBuffer.length.toString(),
             "Cache-Control": "private, no-cache, no-store, must-revalidate",
           },
