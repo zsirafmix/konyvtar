@@ -19,112 +19,165 @@ export interface MegaBookRecord {
   }>;
 }
 
+export function norm(s: string): string {
+  return (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+export function cleanSortKey(str: string): string {
+  return (str || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/^[^a-zA-Z0-9]+/, "")
+    .trim()
+    .toLowerCase();
+}
+
+export function authorSortKey(str: string): string {
+  const clean = cleanSortKey(str);
+  if (!clean) return "zz_zz";
+  if (/^[0-9]/.test(clean)) return `zz_${clean}`;
+  return clean;
+}
+
+export function titleSortKey(str: string): string {
+  let clean = cleanSortKey(str);
+  clean = clean.replace(/^[0-9]+[\s\-._]+/, "");
+  if (!clean) return "zz_zz";
+  if (/^[0-9]/.test(clean)) return `zz_${clean}`;
+  return clean;
+}
+
+export interface GenreDefinition {
+  slug: string;
+  name: string;
+  test: (normalizedText: string) => boolean;
+}
+
+export const GENRE_DEFINITIONS: GenreDefinition[] = [
+  {
+    slug: "sci-fi",
+    name: "Sci-Fi",
+    test: (s) => /asimov|clarke|dick|herbert|lem|bradbury|galaktika|nemere|strugackij|sci-fi|scifi|galaxis|robot|csillag|bolygo|ur|urhajo|star wars|star trek/i.test(s),
+  },
+  {
+    slug: "fantasy",
+    name: "Fantasy",
+    test: (s) => /tolkien|martin|feist|pratchett|jordan|sapkowski|rowling|sanderson|varazslo|sarkany|magia|boszorkany|tunde|elf|elfek|hos|kard/i.test(s),
+  },
+  {
+    slug: "krimi",
+    name: "Krimi & Bűnügyi",
+    test: (s) => /christie|doyle|lawrence|nesbo|coben|sandford|chandler|connelly|gardner|leban|gyilkossag|halal|nyomoz|rejtely|tetthely|bunteny|detektiv/i.test(s),
+  },
+  {
+    slug: "kaland",
+    name: "Kalandregény",
+    test: (s) => /rejto|verne|may karl|dumas|salgari|london jack|legio|kaland|kincs|sziget|expedicio|hajo/i.test(s),
+  },
+  {
+    slug: "magyar-irodalom",
+    name: "Magyar Irodalom",
+    test: (s) => /jokai|gardonyi|mikszath|moricz|krudy|karinthy|kosztolanyi|arany janos|petofi|ady endre|babits|jozsef attila|radnoti|wass albert|moldova|orkeny|szabo magda|marai|nemeth laszlo|illes/i.test(s),
+  },
+  {
+    slug: "horror",
+    name: "Horror & Thriller",
+    test: (s) => /king|koontz|poe|lovecraft|barker|stoker|straub|remulet|pokol|sotet|szorny|ver|felelem|retteges|kisertet|fantom|thriller/i.test(s),
+  },
+  {
+    slug: "romantikus",
+    name: "Romantikus",
+    test: (s) => /roberts|steel|sandemo|austen|bronte|sparks|szerelem|sziv|vagy|szenvedely|eskuvo|menyasszony|csok/i.test(s),
+  },
+  {
+    slug: "tortenelem",
+    name: "Történelmi Regény",
+    test: (s) => /passuth|waltari|clavell|gardonyi|jokai|dumas|druon|tortenelem|kozepkor|roma|csaszar|kiraly|haboru|csata|lovag|honfoglalas|szabadsagharc/i.test(s),
+  },
+  {
+    slug: "humor",
+    name: "Humor & Szatíra",
+    test: (s) => /rejto|moldova|karinthy|wodehouse|adams douglas|pratchett|humor|vicc|szatira|kacagas|komedia|parodia/i.test(s),
+  },
+  {
+    slug: "vilagirodalom",
+    name: "Világirodalom",
+    test: (s) => /tolstoy|dostoevsky|dosztojevszkij|hugo|hemingway|kafka|marquez|shakespeare|wilde|goethe|cervantes|mann thomas|camus|sartre|joyce/i.test(s),
+  },
+  {
+    slug: "ifjusagi",
+    name: "Ifjúsági & Családi",
+    test: (s) => /rowling|lindgren|saint-exupery|molnar ferenc|fekete istvan|mese|fiuk|gyerek|ifjusag|kamasz|herceg|varazslat/i.test(s),
+  },
+  {
+    slug: "disztopia",
+    name: "Disztópia",
+    test: (s) => /orwell|huxley|bradbury|atwood|zamjatin|1984|szep uj vilag|allatfarm|disztopia|apokalipszis|elnyomas/i.test(s),
+  },
+  {
+    slug: "kiberpunk",
+    name: "Kiberpunk",
+    test: (s) => /gibson|stephenson|sterling|kiber|neuromancer|neuromanc|matrix|hacker|virtualis|kiborg/i.test(s),
+  },
+  {
+    slug: "uropera",
+    name: "Űropera",
+    test: (s) => /herbert|asimov|clarke|hamilton|banks|dune|dune|alapitvany|birodalom|urhajo|csillagkozi|hiperter/i.test(s),
+  },
+  {
+    slug: "misztikum",
+    name: "Misztikum & Ezotéria",
+    test: (s) => /misztik|titok|okkult|lelek|szellem|joslat|asztrologia|ezoteria|meditacio|karma|reinkarnacio/i.test(s),
+  },
+  {
+    slug: "filozofia",
+    name: "Filozófia",
+    test: (s) => /platon|arisztotelesz|kant|nietzsche|schopenhauer|kierkegaard|aurelius|filozofia|bolcselet|etika|gondolkodas/i.test(s),
+  },
+  {
+    slug: "novellak",
+    name: "Novellák & Kisregények",
+    test: (s) => /novella|elbeszeles|antologia|tortenetek|valogatas|karcolat|rovid/i.test(s),
+  },
+  {
+    slug: "eletrajz",
+    name: "Életrajz & Memoár",
+    test: (s) => /eletrajz|oneletrajz|memoar|emlekirat|naplo|vallomasok|portre/i.test(s),
+  },
+  {
+    slug: "pszichologia",
+    name: "Pszichológia & Önismeret",
+    test: (s) => /freud|jung|adler|fromm|pszichologia|lelektan|onismeret|terapia|szemelyiseg|tudatalatti/i.test(s),
+  },
+  {
+    slug: "versek",
+    name: "Versek & Líra",
+    test: (s) => /vers|versek|lira|koltemeny|kolteszet|szonett|ballada/i.test(s),
+  },
+  {
+    slug: "tudomany",
+    name: "Ismeretterjesztő & Tudomány",
+    test: (s) => /tudomany|ismeretterjeszto|fizika|matematika|biologia|kemia|csillagaszat|univerzum|darwin|hawking|sagan/i.test(s),
+  },
+];
+
 // Map genre keywords
 function inferCategories(author: string, title: string): string[] {
-  const a = author.toLowerCase();
-  const t = title.toLowerCase();
+  const normText = norm(`${author} ${title}`);
+  const matched: string[] = [];
 
-  if (
-    a.includes("asimov") ||
-    a.includes("clarke") ||
-    a.includes("dick") ||
-    a.includes("herbert") ||
-    a.includes("lem") ||
-    a.includes("bradbury") ||
-    a.includes("galaktika") ||
-    a.includes("crispin") ||
-    a.includes("strugackij") ||
-    a.includes("nemere") ||
-    t.includes("sci-fi") ||
-    t.includes("galaxis") ||
-    t.includes("robot") ||
-    t.includes("csillag") ||
-    t.includes("bolygó") ||
-    t.includes("űr") ||
-    t.includes("star wars")
-  ) {
-    return ["Sci-Fi", "Klasszikus Fantasztikum"];
+  for (const g of GENRE_DEFINITIONS) {
+    if (g.test(normText)) {
+      matched.push(g.name);
+      if (matched.length >= 2) break;
+    }
   }
 
-  if (
-    a.includes("christie") ||
-    a.includes("lawrence") ||
-    a.includes("doyle") ||
-    a.includes("sandford") ||
-    a.includes("nesbo") ||
-    a.includes("coben") ||
-    t.includes("gyilkosság") ||
-    t.includes("halál") ||
-    t.includes("nyomoz") ||
-    t.includes("rejtély")
-  ) {
-    return ["Krimi", "Rejtély"];
+  if (matched.length === 0) {
+    return ["Szépirodalom", "Olvasmány"];
   }
 
-  if (
-    a.includes("rejto") ||
-    a.includes("rejtő") ||
-    a.includes("moldova") ||
-    a.includes("karinthy") ||
-    t.includes("légió") ||
-    t.includes("vicc") ||
-    t.includes("kaland")
-  ) {
-    return ["Humor", "Kalandregény"];
-  }
-
-  if (
-    a.includes("king") ||
-    a.includes("koontz") ||
-    a.includes("poe") ||
-    a.includes("lovecraft") ||
-    t.includes("rémület") ||
-    t.includes("pokol") ||
-    t.includes("sötét")
-  ) {
-    return ["Horror", "Thriller"];
-  }
-
-  if (
-    a.includes("jokai") ||
-    a.includes("jókai") ||
-    a.includes("gardonyi") ||
-    a.includes("gárdonyi") ||
-    a.includes("mikszath") ||
-    a.includes("mikszáth") ||
-    a.includes("moricz") ||
-    a.includes("móricz") ||
-    a.includes("krudy") ||
-    a.includes("krúdy") ||
-    a.includes("wass")
-  ) {
-    return ["Klasszikus Magyar Irodalom", "Történelmi Regény"];
-  }
-
-  if (
-    a.includes("tolkien") ||
-    a.includes("martin") ||
-    a.includes("feist") ||
-    a.includes("pratchett") ||
-    a.includes("jordan") ||
-    a.includes("sapkowski") ||
-    t.includes("varázsló") ||
-    t.includes("sárkány") ||
-    t.includes("király")
-  ) {
-    return ["Fantasy", "Hősi Epika"];
-  }
-
-  if (
-    a.includes("roberts") ||
-    a.includes("steel") ||
-    a.includes("sandemo") ||
-    a.includes("austen")
-  ) {
-    return ["Romantikus", "Családregény"];
-  }
-
-  return ["Szépirodalom", "Olvasmány"];
+  return matched;
 }
 
 function guessMimeType(filename: string): string {
@@ -526,3 +579,85 @@ export function getMegaBookDetail(idOrSlug: string) {
     ],
   };
 }
+
+export interface MegaBooksQueryOptions {
+  category?: string | null;
+  searchQuery?: string | null;
+  sortBy?: string | null;
+  page?: number;
+  limit?: number;
+  skip?: number;
+}
+
+export function getMegaBooksFilteredAndSorted(options: MegaBooksQueryOptions = {}) {
+  const { category, searchQuery, sortBy, page, limit = 20 } = options;
+  const skip = options.skip !== undefined ? options.skip : page ? (page - 1) * limit : 0;
+
+  let list = allBooks;
+
+  // 1. Filter by category
+  if (category && category !== "all") {
+    const normCategory = norm(category);
+    const genreDef = GENRE_DEFINITIONS.find(
+      (g) => g.slug === category.toLowerCase().trim() || norm(g.name) === normCategory
+    );
+
+    if (genreDef) {
+      list = list.filter((b) => genreDef.test(norm(`${b.author} ${b.title}`)));
+    } else {
+      list = list.filter((b) => norm(`${b.author} ${b.title}`).includes(normCategory));
+    }
+  }
+
+  // 2. Filter by search query if provided
+  if (searchQuery && searchQuery.trim()) {
+    const q = norm(searchQuery);
+    list = list.filter((b) => norm(`${b.author} ${b.title}`).includes(q));
+  }
+
+  // 3. Sorting
+  const sorted = [...list];
+
+  switch (sortBy) {
+    case "author_asc":
+      sorted.sort((a, b) => authorSortKey(a.author).localeCompare(authorSortKey(b.author), "hu"));
+      break;
+    case "author_desc":
+      sorted.sort((a, b) => authorSortKey(b.author).localeCompare(authorSortKey(a.author), "hu"));
+      break;
+    case "title_asc":
+      sorted.sort((a, b) => titleSortKey(a.title).localeCompare(titleSortKey(b.title), "hu"));
+      break;
+    case "title_desc":
+      sorted.sort((a, b) => titleSortKey(b.title).localeCompare(titleSortKey(a.title), "hu"));
+      break;
+    case "rating_desc":
+      sorted.sort((a, b) => {
+        const hashA = Math.abs(a.title.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0));
+        const hashB = Math.abs(b.title.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0));
+        return (hashB % 6) - (hashA % 6);
+      });
+      break;
+    case "newest":
+      sorted.sort((a, b) => (b.calibreId || 0) - (a.calibreId || 0));
+      break;
+    case "popular":
+    default:
+      // Keep default priority score sort (already sorted in allBooks)
+      break;
+  }
+
+  const paginated = sorted.slice(skip, skip + limit);
+  const currentPage = Math.floor(skip / limit) + 1;
+
+  return {
+    books: paginated.map(toBookCard),
+    pagination: {
+      total: sorted.length,
+      page: currentPage,
+      limit,
+      totalPages: Math.ceil(sorted.length / limit),
+    },
+  };
+}
+

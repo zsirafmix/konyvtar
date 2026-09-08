@@ -1,33 +1,47 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { Library, BookOpen, Bookmark, CheckCircle2, Heart, Lock, Cloud, Sparkles } from "lucide-react";
+import { Library, BookOpen, Bookmark, CheckCircle2, Lock, Cloud, Sparkles, ArrowUpDown, Search } from "lucide-react";
 import { BookCard } from "@/components/BookCard";
+
+const SORT_OPTIONS = [
+  { value: "popular", label: "Ajánlott / Népszerű" },
+  { value: "author_asc", label: "Szerző szerint (A-Z)" },
+  { value: "author_desc", label: "Szerző szerint (Z-A)" },
+  { value: "title_asc", label: "Cím szerint (A-Z)" },
+  { value: "title_desc", label: "Cím szerint (Z-A)" },
+  { value: "rating_desc", label: "Legjobbra értékelt" },
+  { value: "newest", label: "Legfrissebb kötetek" },
+];
 
 export default function LibraryPage() {
   const [activeTab, setActiveTab] = useState<string>("ALL");
   const [books, setBooks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sortBy, setSortBy] = useState<string>("popular");
+  const [searchFilter, setSearchFilter] = useState<string>("");
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchBooks() {
-      try {
-        const res = await fetch("/api/books?limit=50");
-        if (res.ok) {
-          const data = await res.json();
-          setBooks(data.books || []);
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
+  const fetchBooks = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/books?limit=60&sortBy=${sortBy}`);
+      if (res.ok) {
+        const data = await res.json();
+        setBooks(data.books || []);
       }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
+  }, [sortBy]);
+
+  useEffect(() => {
     fetchBooks();
-  }, []);
+  }, [fetchBooks]);
 
   const handleTriggerImport = async () => {
     setImporting(true);
@@ -41,11 +55,7 @@ export default function LibraryPage() {
       if (res.ok) {
         const data = await res.json();
         setImportMessage(data.message || "A teljes MEGA könyvtár szinkronizálva!");
-        const booksRes = await fetch("/api/books?limit=50");
-        if (booksRes.ok) {
-          const bData = await booksRes.json();
-          setBooks(bData.books || []);
-        }
+        fetchBooks();
       }
     } catch {
       setImportMessage("A MEGA tárhely szinkronizálása sikeres!");
@@ -58,13 +68,20 @@ export default function LibraryPage() {
   };
 
   const filteredBooks = books.filter((b) => {
-    if (activeTab === "ALL") return true;
-    if (activeTab === "PRIVATE") return b.distributionStatus === "PRIVATE";
+    if (activeTab === "PRIVATE" && b.distributionStatus !== "PRIVATE") return false;
+
+    if (searchFilter.trim()) {
+      const q = searchFilter.toLowerCase();
+      const titleMatch = (b.title || "").toLowerCase().includes(q);
+      const authorMatch = (b.authors || []).some((a: any) => (a.name || "").toLowerCase().includes(q));
+      if (!titleMatch && !authorMatch) return false;
+    }
+
     return true;
   });
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-8 py-8 space-y-6 pb-20">
+    <div className="max-w-7xl mx-auto px-4 sm:px-8 py-8 space-y-6 pb-20">
       {/* Header & Storage Scanner Trigger */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -77,7 +94,7 @@ export default function LibraryPage() {
         <button
           onClick={handleTriggerImport}
           disabled={importing}
-          className="px-4 py-2.5 rounded-full bg-primary text-primary-foreground font-semibold text-xs flex items-center gap-2 hover:opacity-90 transition-opacity shadow-sm disabled:opacity-50"
+          className="px-4 py-2.5 rounded-full bg-primary text-primary-foreground font-semibold text-xs flex items-center gap-2 hover:opacity-90 transition-opacity shadow-sm disabled:opacity-50 cursor-pointer"
         >
           <Cloud className="w-4 h-4" />
           <span>{importing ? "Szinkronizálás..." : "MEGA felhőtár szinkronizálása"}</span>
@@ -105,7 +122,7 @@ export default function LibraryPage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold transition-colors ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold transition-colors cursor-pointer ${
                 activeTab === tab.id
                   ? "bg-primary/20 text-primary"
                   : "text-muted-foreground hover:text-foreground hover:bg-secondary"
@@ -118,15 +135,56 @@ export default function LibraryPage() {
         })}
       </div>
 
+      {/* Search & Sort Toolbar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-secondary/30 p-3 rounded-2xl border border-border">
+        <div className="relative flex-1">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Keresés a könyvtáramban cím vagy író alapján..."
+            value={searchFilter}
+            onChange={(e) => setSearchFilter(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-background border border-input rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground placeholder:text-muted-foreground"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <ArrowUpDown className="w-4 h-4 text-muted-foreground ml-1" />
+          <label htmlFor="library-sort" className="text-xs font-medium text-muted-foreground hidden md:inline">
+            Rendezés:
+          </label>
+          <select
+            id="library-sort"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="bg-background border border-input text-foreground text-xs font-semibold rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+          >
+            {SORT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {/* Books Grid */}
       {loading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {[1, 2, 3, 4, 5, 6].map((n) => (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => (
             <div key={n} className="aspect-[2/3] bg-secondary/40 rounded-xl animate-pulse" />
           ))}
         </div>
+      ) : filteredBooks.length === 0 ? (
+        <div className="text-center py-16 bg-secondary/20 rounded-2xl border border-dashed border-border space-y-3">
+          <Library className="w-10 h-10 mx-auto text-muted-foreground/50" />
+          <h3 className="text-base font-bold text-foreground">Nincs találat a könyvtárban</h3>
+          <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+            {searchFilter ? "A keresési kifejezésre nem találtunk könyvet a könyvtáradban." : "Ebben a nézetben még nincsenek könyveid."}
+          </p>
+        </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
           {filteredBooks.map((book) => (
             <BookCard key={book.id} {...book} />
           ))}
@@ -135,3 +193,4 @@ export default function LibraryPage() {
     </div>
   );
 }
+

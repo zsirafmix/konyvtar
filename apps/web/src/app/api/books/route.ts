@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, isDatabaseConfigured } from "@librarian/database";
 import { getFallbackBookItems } from "@/lib/fallback-books";
-import { getAllMegaBooks, toBookCard } from "@/lib/mega-catalog";
+import { getAllMegaBooks, toBookCard, getMegaBooksFilteredAndSorted } from "@/lib/mega-catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +10,8 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const category = searchParams.get("category");
     const shelf = searchParams.get("shelf");
+    const sortBy = searchParams.get("sortBy") || searchParams.get("sort");
+    const q = searchParams.get("q") || searchParams.get("query") || searchParams.get("search");
     const limit = parseInt(searchParams.get("limit") || "20", 10);
     const page = parseInt(searchParams.get("page") || "1", 10);
     const skip = (page - 1) * limit;
@@ -19,7 +21,7 @@ export async function GET(req: NextRequest) {
 
     if (isDatabaseConfigured) {
       const where: any = {};
-      if (category) {
+      if (category && category !== "all") {
         where.categories = {
           some: {
             category: {
@@ -28,11 +30,23 @@ export async function GET(req: NextRequest) {
           },
         };
       }
+      if (q && q.trim()) {
+        where.OR = [
+          { title: { contains: q, mode: "insensitive" } },
+          { originalTitle: { contains: q, mode: "insensitive" } },
+        ];
+      }
 
       let orderBy: any = { createdAt: "desc" };
-      if (shelf === "top" || shelf === "trending") {
+      if (sortBy === "title_asc") {
+        orderBy = { title: "asc" };
+      } else if (sortBy === "title_desc") {
+        orderBy = { title: "desc" };
+      } else if (sortBy === "author_asc" || sortBy === "author_desc") {
+        orderBy = { title: sortBy === "author_asc" ? "asc" : "desc" };
+      } else if (sortBy === "rating_desc" || shelf === "top" || shelf === "trending") {
         orderBy = { averageRating: "desc" };
-      } else if (shelf === "new") {
+      } else if (sortBy === "newest" || shelf === "new") {
         orderBy = { createdAt: "desc" };
       }
 
@@ -70,27 +84,16 @@ export async function GET(req: NextRequest) {
     }
 
     if (books.length === 0) {
-      const megaBooks = getAllMegaBooks();
-      let filtered = megaBooks;
-
-      if (category && category !== "all") {
-        const normCat = category.toLowerCase().replace(/[^a-z0-9]/g, "");
-        filtered = filtered.filter((b) =>
-          b.title.toLowerCase().includes(normCat) || b.author.toLowerCase().includes(normCat)
-        );
-      }
-
-      const paginated = filtered.slice(skip, skip + limit);
-
-      return NextResponse.json({
-        books: paginated.map(toBookCard),
-        pagination: {
-          total: filtered.length,
-          page,
-          limit,
-          totalPages: Math.ceil(filtered.length / limit),
-        },
+      const result = getMegaBooksFilteredAndSorted({
+        category,
+        searchQuery: q,
+        sortBy,
+        page,
+        limit,
+        skip,
       });
+
+      return NextResponse.json(result);
     }
 
     const formatted = books.map((b: any) => {

@@ -361,9 +361,12 @@ export default function BookDetailPage({ params }: { params: { slug: string } })
                   <span className="font-semibold text-xs text-foreground">{r.userName}</span>
                 </div>
                 {r.rating && (
-                  <div className="flex text-amber-500">
-                    {[...Array(r.rating)].map((_, i) => (
-                      <Star key={i} className="w-3 h-3 fill-current" />
+                  <div className="flex text-amber-500 gap-0.5">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <Star
+                        key={star}
+                        className={`w-3 h-3 ${star <= Math.round(Number(r.rating) || 5) ? "fill-current" : "stroke-current text-muted-foreground/30"}`}
+                      />
                     ))}
                   </div>
                 )}
