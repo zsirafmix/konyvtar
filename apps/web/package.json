@@ -6,7 +6,8 @@
     "dev": "next dev",
     "prebuild": "npm run db:generate --workspace=@librarian/database",
     "build": "next build",
-    "start": "node scripts/init-db.js && next start",
+    "start": "node scripts/start.js",
+    "start:render": "node scripts/start.js",
     "import:mega": "tsx src/scripts/import-mega.ts",
     "lint": "next lint"
   },
