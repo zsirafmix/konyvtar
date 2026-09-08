@@ -21,14 +21,35 @@ import {
   ExternalLink,
   Layers,
   ArrowRight,
+  Users,
+  User,
+  Shield,
+  Crown,
+  Key,
+  Sliders,
+  Plus,
+  Trash2,
+  Save,
+  Search,
 } from "lucide-react";
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<"overview" | "metadata" | "rights" | "imports">("imports");
+  const [activeTab, setActiveTab] = useState<"users" | "imports" | "overview" | "metadata" | "rights">("users");
   const [metadataQueue, setMetadataQueue] = useState<any[]>([]);
   const [rightsEditions, setRightsEditions] = useState<any[]>([]);
   const [importsData, setImportsData] = useState<any>({});
   const [loading, setLoading] = useState(true);
+
+  // Users & Permissions state
+  const [usersList, setUsersList] = useState<any[]>([]);
+  const [activeUser, setActiveUser] = useState<any>(null);
+  const [userSearch, setUserSearch] = useState("");
+  const [userMessage, setUserMessage] = useState<string | null>(null);
+  const [newUserName, setNewUserName] = useState("");
+  const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserRole, setNewUserRole] = useState<"admin" | "moderator" | "superuser" | "user">("user");
+  const [showNewUserForm, setShowNewUserForm] = useState(false);
+  const [userSavingId, setUserSavingId] = useState<string | null>(null);
 
   // MEGA Import state
   const [folderUrl, setFolderUrl] = useState("");
@@ -48,10 +69,11 @@ export default function AdminPage() {
   const loadAllAdminData = async () => {
     setLoading(true);
     try {
-      const [metaRes, rightsRes, importsRes] = await Promise.all([
+      const [metaRes, rightsRes, importsRes, usersRes] = await Promise.all([
         fetch("/api/admin/metadata"),
         fetch("/api/admin/rights"),
         fetch("/api/admin/imports"),
+        fetch("/api/admin/users"),
       ]);
 
       if (metaRes.ok) {
@@ -65,6 +87,11 @@ export default function AdminPage() {
       if (importsRes.ok) {
         const imp = await importsRes.json();
         setImportsData(imp);
+      }
+      if (usersRes && usersRes.ok) {
+        const uData = await usersRes.json();
+        setUsersList(uData.users || []);
+        setActiveUser(uData.activeUser || null);
       }
     } catch (err) {
       console.error(err);
@@ -137,6 +164,141 @@ export default function AdminPage() {
     }
   };
 
+  const handleUpdateUserRole = async (userId: string, role: string) => {
+    setUserSavingId(userId);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUsersList((prev) => prev.map((u) => (u.id === userId ? data.user : u)));
+        setUserMessage(data.message);
+        setTimeout(() => setUserMessage(null), 4000);
+      }
+    } catch (err: any) {
+      setUserMessage("Hiba a mentés során: " + err.message);
+    } finally {
+      setUserSavingId(null);
+    }
+  };
+
+  const handleTogglePermission = async (userId: string, permKey: string, currentValue: boolean) => {
+    setUserSavingId(userId);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          permissions: {
+            [permKey]: !currentValue,
+          },
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUsersList((prev) => prev.map((u) => (u.id === userId ? data.user : u)));
+        setUserMessage("Jogosultság azonnal módosítva!");
+        setTimeout(() => setUserMessage(null), 3000);
+      }
+    } catch (err: any) {
+      setUserMessage("Hiba a jogosultság mentésekor: " + err.message);
+    } finally {
+      setUserSavingId(null);
+    }
+  };
+
+  const handleUpdateAiLimit = async (userId: string, limit: number) => {
+    setUserSavingId(userId);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          permissions: {
+            aiDailyLimit: limit,
+          },
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUsersList((prev) => prev.map((u) => (u.id === userId ? data.user : u)));
+        setUserMessage("Napi AI limit frissítve!");
+        setTimeout(() => setUserMessage(null), 3000);
+      }
+    } catch (err: any) {
+      setUserMessage("Hiba: " + err.message);
+    } finally {
+      setUserSavingId(null);
+    }
+  };
+
+  const handleCreateUser = async () => {
+    if (!newUserEmail || !newUserEmail.includes("@")) {
+      setUserMessage("Kérlek adj meg egy érvényes email címet!");
+      return;
+    }
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newUserName.trim() || newUserEmail.split("@")[0],
+          email: newUserEmail.trim(),
+          role: newUserRole,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUsersList((prev) => [...prev, data.user]);
+        setNewUserName("");
+        setNewUserEmail("");
+        setShowNewUserForm(false);
+        setUserMessage(data.message);
+        setTimeout(() => setUserMessage(null), 4000);
+      }
+    } catch (err: any) {
+      setUserMessage("Hiba a létrehozáskor: " + err.message);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    if (!confirm(`Biztosan törölni szeretnéd „${userName}” felhasználót?`)) return;
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, { method: "DELETE" });
+      if (res.ok) {
+        setUsersList((prev) => prev.filter((u) => u.id !== userId));
+        setUserMessage("A felhasználó sikeresen törölve!");
+        setTimeout(() => setUserMessage(null), 4000);
+      } else {
+        const err = await res.json();
+        setUserMessage(err.error || "A felhasználó nem törölhető.");
+      }
+    } catch (err: any) {
+      setUserMessage("Hiba a törléskor: " + err.message);
+    }
+  };
+
+  const handleSwitchSession = async (userId: string) => {
+    try {
+      const res = await fetch("/api/auth/active-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setActiveUser(data.user);
+        setUserMessage(`Munkamenet átváltva: ${data.user.name} (${data.user.role.toUpperCase()})`);
+        setTimeout(() => setUserMessage(null), 4000);
+      }
+    } catch (err: any) {
+      setUserMessage("Hiba az átváltáskor: " + err.message);
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-8 py-8 space-y-8 pb-24">
       {/* Header */}
@@ -158,9 +320,17 @@ export default function AdminPage() {
         </button>
       </div>
 
+      {userMessage && (
+        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-xs sm:text-sm text-emerald-600 dark:text-emerald-400 font-semibold flex items-center justify-between animate-in fade-in">
+          <span>{userMessage}</span>
+          <button onClick={() => setUserMessage(null)} className="text-xs opacity-70 hover:opacity-100">✕</button>
+        </div>
+      )}
+
       {/* Admin Nav Tabs */}
       <div className="flex items-center gap-2 border-b border-border pb-2 overflow-x-auto hide-scrollbar">
         {[
+          { id: "users", label: "Felhasználók és Jogosultságok", badge: `${usersList.length} fő` },
           { id: "imports", label: "MEGA Import & Indexelő", badge: "Kiemelt" },
           { id: "overview", label: "Áttekintés & Metrikák" },
           { id: "metadata", label: `AI Metaadat Jóváhagyás (${metadataQueue.filter((q) => q.status === "PENDING").length})` },
@@ -186,6 +356,357 @@ export default function AdminPage() {
           </button>
         ))}
       </div>
+
+      {/* TAB 0: USERS & GRANULAR PERMISSIONS */}
+      {activeTab === "users" && (
+        <div className="space-y-8">
+          {/* Top Role Stats */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="p-4 rounded-2xl bg-card border border-border space-y-1">
+              <div className="flex items-center gap-2 text-xs font-bold text-amber-500 uppercase">
+                <Crown className="w-4 h-4" />
+                <span>Adminisztrátorok</span>
+              </div>
+              <p className="text-2xl font-extrabold text-foreground">
+                {usersList.filter((u) => u.role === "admin").length} fő
+              </p>
+              <p className="text-[11px] text-muted-foreground">Teljes rendszer- és jogkezelés</p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-card border border-border space-y-1">
+              <div className="flex items-center gap-2 text-xs font-bold text-blue-500 uppercase">
+                <Shield className="w-4 h-4" />
+                <span>Moderátorok</span>
+              </div>
+              <p className="text-2xl font-extrabold text-foreground">
+                {usersList.filter((u) => u.role === "moderator").length} fő
+              </p>
+              <p className="text-[11px] text-muted-foreground">Tartalom- és klubmoderáció</p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-card border border-emerald-500/30 bg-emerald-500/5 space-y-1">
+              <div className="flex items-center gap-2 text-xs font-bold text-emerald-500 uppercase">
+                <Sparkles className="w-4 h-4" />
+                <span>1$ Superuserek</span>
+              </div>
+              <p className="text-2xl font-extrabold text-foreground">
+                {usersList.filter((u) => u.role === "superuser").length} fő
+              </p>
+              <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">Befizetett 1$ támogatás ✓</p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-card border border-border space-y-1">
+              <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase">
+                <User className="w-4 h-4" />
+                <span>Olvasók & Vendégek</span>
+              </div>
+              <p className="text-2xl font-extrabold text-foreground">
+                {usersList.filter((u) => u.role === "user").length} fő
+              </p>
+              <p className="text-[11px] text-muted-foreground">Alapértelmezett olvasói jogok</p>
+            </div>
+          </div>
+
+          {/* Active Testing User Banner */}
+          {activeUser && (
+            <div className="p-4 rounded-2xl bg-secondary/50 border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">
+                  {activeUser.role === "admin" ? "👑" : activeUser.role === "superuser" ? "⭐" : activeUser.role === "moderator" ? "🛡️" : "📖"}
+                </div>
+                <div>
+                  <span className="text-muted-foreground block">Jelenleg tesztelt aktív fiók:</span>
+                  <span className="font-bold text-foreground text-sm">
+                    {activeUser.name} ({activeUser.email}) — <span className="text-primary uppercase font-extrabold">{activeUser.role}</span>
+                  </span>
+                </div>
+              </div>
+              <span className="text-muted-foreground text-[11px]">
+                Az alábbi felhasználóknál a „Tesztelés ezzel a fiókkal” gombbal azonnal válthatsz szerepkört.
+              </span>
+            </div>
+          )}
+
+          {/* Toolbar: Search + Add New User */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Felhasználó keresése név vagy e-mail alapján..."
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
+              />
+            </div>
+
+            <button
+              onClick={() => setShowNewUserForm(!showNewUserForm)}
+              className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold flex items-center gap-2 hover:opacity-90 transition-opacity cursor-pointer shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span>{showNewUserForm ? "Űrlap bezárása" : "Új felhasználó hozzáadása"}</span>
+            </button>
+          </div>
+
+          {/* Create User Form Drawer */}
+          {showNewUserForm && (
+            <div className="p-6 rounded-3xl bg-card border border-primary/30 shadow-xl space-y-4 animate-in fade-in">
+              <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                <User className="w-4 h-4 text-primary" />
+                <span>Új felhasználó regisztrálása a rendszerbe</span>
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <input
+                  type="text"
+                  placeholder="Teljes név (pl. Minta János)"
+                  value={newUserName}
+                  onChange={(e) => setNewUserName(e.target.value)}
+                  className="px-3 py-2 bg-secondary/50 border border-border rounded-xl text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <input
+                  type="email"
+                  placeholder="E-mail cím (pl. janos@gmail.com)"
+                  value={newUserEmail}
+                  onChange={(e) => setNewUserEmail(e.target.value)}
+                  className="px-3 py-2 bg-secondary/50 border border-border rounded-xl text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <select
+                  value={newUserRole}
+                  onChange={(e) => setNewUserRole(e.target.value as any)}
+                  className="px-3 py-2 bg-secondary/50 border border-border rounded-xl text-xs text-foreground font-semibold focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                >
+                  <option value="user">User (Normál Olvasó)</option>
+                  <option value="superuser">Superuser (1$ Támogató)</option>
+                  <option value="moderator">Moderator (Közösségi Moderátor)</option>
+                  <option value="admin">Admin (Rendszergazda)</option>
+                </select>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  onClick={() => setShowNewUserForm(false)}
+                  className="px-4 py-2 rounded-xl bg-secondary text-secondary-foreground text-xs font-semibold hover:bg-accent cursor-pointer"
+                >
+                  Mégse
+                </button>
+                <button
+                  onClick={handleCreateUser}
+                  className="px-5 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-500 cursor-pointer shadow-md"
+                >
+                  Felhasználó létrehozása
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* User Cards with Detailed Permission Controls */}
+          <div className="space-y-4">
+            {usersList
+              .filter((u) => {
+                if (!userSearch.trim()) return true;
+                const q = userSearch.toLowerCase();
+                return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || u.role.toLowerCase().includes(q);
+              })
+              .map((u) => {
+                const isCurrentActive = activeUser?.id === u.id;
+                const isSaving = userSavingId === u.id;
+
+                return (
+                  <div
+                    key={u.id}
+                    className={`p-5 rounded-3xl bg-card border transition-all space-y-4 ${
+                      isCurrentActive
+                        ? "border-primary shadow-lg ring-2 ring-primary/20"
+                        : "border-border hover:border-border/80"
+                    }`}
+                  >
+                    {/* User Header */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-sm ${
+                          u.role === "admin"
+                            ? "bg-amber-500/20 text-amber-500 border border-amber-500/30"
+                            : u.role === "moderator"
+                            ? "bg-blue-500/20 text-blue-500 border border-blue-500/30"
+                            : u.role === "superuser"
+                            ? "bg-emerald-500/20 text-emerald-500 border border-emerald-500/30"
+                            : "bg-secondary text-foreground"
+                        }`}>
+                          {u.role === "admin" ? "👑" : u.role === "superuser" ? "⭐" : u.role === "moderator" ? "🛡️" : "📖"}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-extrabold text-sm text-foreground">{u.name}</h4>
+                            {isCurrentActive && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-primary/20 text-primary">
+                                AKTÍV FIÓK
+                              </span>
+                            )}
+                            {u.role === "superuser" && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-500">
+                                1$ TÁMOGATÓ
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">{u.email} • ID: <span className="font-mono text-[10px]">{u.id}</span></p>
+                        </div>
+                      </div>
+
+                      {/* Role Dropdown */}
+                      <div className="flex items-center gap-2 self-start sm:self-auto">
+                        <label className="text-xs font-semibold text-muted-foreground">Szint:</label>
+                        <select
+                          value={u.role}
+                          onChange={(e) => handleUpdateUserRole(u.id, e.target.value)}
+                          disabled={isSaving}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold border focus:outline-none cursor-pointer ${
+                            u.role === "admin"
+                              ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30"
+                              : u.role === "moderator"
+                              ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30"
+                              : u.role === "superuser"
+                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+                              : "bg-secondary text-foreground border-border"
+                          }`}
+                        >
+                          <option value="admin">👑 Adminisztrátor</option>
+                          <option value="moderator">🛡️ Moderátor</option>
+                          <option value="superuser">⭐ Superuser (1$ Támogató)</option>
+                          <option value="user">📖 Olvasó (User)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Permissions Matrix for this User */}
+                    <div className="bg-secondary/30 rounded-2xl p-4 border border-border/50 space-y-3">
+                      <div className="flex items-center justify-between text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                        <span>Külön beállítható jogok ezen felhasználónál:</span>
+                        {isSaving && <span className="text-primary text-[10px] animate-pulse">Mentés folyamatban...</span>}
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 pt-1">
+                        {/* canDownload */}
+                        <label className="flex items-center gap-2 text-xs font-medium text-foreground cursor-pointer bg-card/70 p-2.5 rounded-xl border border-border/40 hover:border-border">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(u.permissions?.canDownload)}
+                            onChange={() => handleTogglePermission(u.id, "canDownload", Boolean(u.permissions?.canDownload))}
+                            className="rounded text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                          />
+                          <span>Fájl letöltés</span>
+                        </label>
+
+                        {/* canDirectDownload */}
+                        <label className="flex items-center gap-2 text-xs font-medium text-foreground cursor-pointer bg-card/70 p-2.5 rounded-xl border border-border/40 hover:border-border">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(u.permissions?.canDirectDownload)}
+                            onChange={() => handleTogglePermission(u.id, "canDirectDownload", Boolean(u.permissions?.canDirectDownload))}
+                            className="rounded text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                          />
+                          <span>Közvetlen letöltés</span>
+                        </label>
+
+                        {/* canUploadPrivate */}
+                        <label className="flex items-center gap-2 text-xs font-medium text-foreground cursor-pointer bg-card/70 p-2.5 rounded-xl border border-border/40 hover:border-border">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(u.permissions?.canUploadPrivate)}
+                            onChange={() => handleTogglePermission(u.id, "canUploadPrivate", Boolean(u.permissions?.canUploadPrivate))}
+                            className="rounded text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                          />
+                          <span>Privát könyvek</span>
+                        </label>
+
+                        {/* canModerate */}
+                        <label className="flex items-center gap-2 text-xs font-medium text-foreground cursor-pointer bg-card/70 p-2.5 rounded-xl border border-border/40 hover:border-border">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(u.permissions?.canModerate)}
+                            onChange={() => handleTogglePermission(u.id, "canModerate", Boolean(u.permissions?.canModerate))}
+                            className="rounded text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                          />
+                          <span>Moderáció</span>
+                        </label>
+
+                        {/* canAdmin */}
+                        <label className="flex items-center gap-2 text-xs font-medium text-foreground cursor-pointer bg-card/70 p-2.5 rounded-xl border border-border/40 hover:border-border">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(u.permissions?.canAdmin)}
+                            onChange={() => handleTogglePermission(u.id, "canAdmin", Boolean(u.permissions?.canAdmin))}
+                            className="rounded text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                          />
+                          <span>Admin pult</span>
+                        </label>
+                      </div>
+
+                      {/* AI Daily limit adjuster */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-border/40 text-xs">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+                          <span className="font-semibold text-foreground">Napi AI Könyvtáros kérdések kerete:</span>
+                          <span className="font-bold text-primary px-2 py-0.5 rounded-md bg-primary/10">
+                            {u.permissions?.aiDailyLimit || 20} kérdés / nap
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          {[10, 50, 500, 1000, 9999].map((limitVal) => (
+                            <button
+                              key={limitVal}
+                              onClick={() => handleUpdateAiLimit(u.id, limitVal)}
+                              className={`px-2 py-1 rounded text-[10px] font-bold transition-colors cursor-pointer ${
+                                (u.permissions?.aiDailyLimit || 20) === limitVal
+                                  ? "bg-primary text-primary-foreground"
+                                  : "bg-card text-muted-foreground hover:text-foreground border border-border/40"
+                              }`}
+                            >
+                              {limitVal === 9999 ? "Korlátlan" : limitVal}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Card Actions */}
+                    <div className="flex items-center justify-between pt-1">
+                      <div className="text-[11px] text-muted-foreground flex items-center gap-3">
+                        <span>Könyvek olvasva: <b>{u.stats?.booksRead || 0}</b></span>
+                        <span>Letöltések: <b>{u.stats?.downloadsCount || 0}</b></span>
+                        {u.stats?.contributedUSD > 0 && (
+                          <span className="text-emerald-500 font-bold">Támogatás: ${u.stats.contributedUSD}</span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {!isCurrentActive && (
+                          <button
+                            onClick={() => handleSwitchSession(u.id)}
+                            className="px-3 py-1.5 rounded-xl bg-secondary hover:bg-accent text-secondary-foreground text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                          >
+                            <Key className="w-3.5 h-3.5 text-primary" />
+                            <span>Tesztelés ezzel a fiókkal</span>
+                          </button>
+                        )}
+
+                        {u.id !== "usr_admin_01" && (
+                          <button
+                            onClick={() => handleDeleteUser(u.id, u.name)}
+                            className="p-2 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                            title="Felhasználó törlése"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
 
       {/* TAB 1: MEGA IMPORTS & CLOUD QUEUE */}
       {activeTab === "imports" && (

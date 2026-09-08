@@ -5,6 +5,7 @@ import { canUserDownload, UserContext } from "@librarian/auth";
 import { defaultStorageManager } from "@librarian/storage";
 import { FALLBACK_BOOKS } from "@/lib/fallback-books";
 import { findFormatById, getMimeType } from "@/lib/mega-catalog";
+import { getActiveUser } from "@/lib/users-store";
 
 export const dynamic = "force-dynamic";
 
@@ -248,14 +249,21 @@ export async function GET(req: NextRequest, { params }: { params: { fileId: stri
     const { fileId } = params;
 
     // Retrieve active user from header / cookies or fallback to demo user
-    const userId = req.headers.get("x-user-id") || req.cookies.get("librarian_uid")?.value || "demo_user_id";
-    const userRole = (req.headers.get("x-user-role") || "USER") as any;
-    const membershipStatus = (req.headers.get("x-user-membership") || "FREE") as any;
+    const requestedUid = req.cookies.get("librarian_uid")?.value || req.headers.get("x-user-id");
+    const activeUser = getActiveUser(requestedUid);
+
+    // Enforce download permission
+    if (activeUser && activeUser.permissions && !activeUser.permissions.canDownload) {
+      return NextResponse.json(
+        { error: "A letöltési jogosultságod jelenleg szüneteltetve van a fiókodon." },
+        { status: 403 }
+      );
+    }
 
     const currentUser: UserContext = {
-      id: userId,
-      role: userRole,
-      membershipStatus,
+      id: activeUser.id,
+      role: activeUser.role === "admin" ? "ADMIN" : (activeUser.role === "moderator" ? "MODERATOR" : "USER"),
+      membershipStatus: activeUser.membershipStatus,
     };
 
     // 1. Check if downloading a fallback sample book
