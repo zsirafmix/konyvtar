@@ -89,6 +89,15 @@ model User {
   auditLogs           AuditLog[]
   notifications       Notification[]
   editionsOwned       BookEdition[]       @relation("EditionOwner")
+  permissions         UserPermission?
+  sessions            Session[]
+  forumTopics         ForumTopic[]
+  forumPosts          ForumPost[]
+  chatMessages        ChatMessage[]
+  chatRoomsCreated    ChatRoom[]          @relation("ChatRoomCreator")
+  payments            Payment[]
+  subscriptions       Subscription[]
+  aiUsages            AiUsage[]
 
   @@map("users")
 }
@@ -712,3 +721,176 @@ model Notification {
   @@index([userId, isRead])
   @@map("notifications")
 }
+
+model Permission {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+
+  @@map("permissions")
+}
+
+model UserPermission {
+  id                  String   @id @default(uuid())
+  userId              String   @unique
+  canDownload         Boolean  @default(true)
+  canDirectDownload   Boolean  @default(false)
+  canUploadPrivate    Boolean  @default(false)
+  canModerate         Boolean  @default(false)
+  canAdmin            Boolean  @default(false)
+  canUseChat          Boolean  @default(true)
+  canSendChatMessages Boolean  @default(true)
+  canCreateChatRooms  Boolean  @default(false)
+  canModerateChat     Boolean  @default(false)
+  aiDailyLimit        Int      @default(20)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_permissions")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("sessions")
+}
+
+model ForumTopic {
+  id         String      @id @default(uuid())
+  title      String
+  slug       String      @unique
+  content    String
+  authorId   String
+  isPinned   Boolean     @default(false)
+  isLocked   Boolean     @default(false)
+  viewsCount Int         @default(0)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  author User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  posts  ForumPost[]
+
+  @@index([authorId])
+  @@index([createdAt])
+  @@map("forum_topics")
+}
+
+model ForumPost {
+  id        String     @id @default(uuid())
+  topicId   String
+  authorId  String
+  content   String
+  isEdited  Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  topic  ForumTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  author User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([topicId])
+  @@index([authorId])
+  @@map("forum_posts")
+}
+
+model ChatRoom {
+  id          String        @id @default(uuid())
+  name        String
+  slug        String        @unique
+  description String?
+  isDefault   Boolean       @default(false)
+  isPrivate   Boolean       @default(false)
+  createdById String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  createdBy User?         @relation("ChatRoomCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  messages  ChatMessage[]
+
+  @@map("chat_rooms")
+}
+
+model ChatMessage {
+  id          String   @id @default(uuid())
+  roomId      String
+  authorId    String
+  content     String
+  isDeleted   Boolean  @default(false)
+  deletedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  room   ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  author User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, createdAt])
+  @@index([authorId])
+  @@map("chat_messages")
+}
+
+model Payment {
+  id            String   @id @default(uuid())
+  userId        String
+  provider      String   // paypal, revolut, stripe
+  orderId       String   @unique
+  amount        Float
+  currency      String   @default("USD")
+  status        String   // COMPLETED, PENDING, FAILED
+  receiverEmail String?
+  rawPayload    Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([orderId])
+  @@map("payments")
+}
+
+model Subscription {
+  id        String    @id @default(uuid())
+  userId    String
+  tier      String    // FREE, SUPERUSER
+  status    String    // ACTIVE, EXPIRED, CANCELLED
+  startedAt DateTime  @default(now())
+  expiresAt DateTime?
+  paymentId String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("subscriptions")
+}
+
+model AiUsage {
+  id           String   @id @default(uuid())
+  userId       String
+  dateKey      String   // YYYY-MM-DD
+  requestCount Int      @default(0)
+  tokensUsed   Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dateKey])
+  @@index([userId])
+  @@map("ai_usages")
+}
+

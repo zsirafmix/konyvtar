@@ -6,7 +6,85 @@ export interface UserContext {
   id: string;
   role: Role;
   membershipStatus?: MembershipStatus;
+  permissions?: Partial<UserPermissions>;
 }
+
+export interface UserPermissions {
+  canDownload: boolean;
+  canDirectDownload: boolean;
+  canUploadPrivate: boolean;
+  canModerate: boolean;
+  canAdmin: boolean;
+  canUseChat: boolean;
+  canSendChatMessages: boolean;
+  canCreateChatRooms: boolean;
+  canModerateChat: boolean;
+  aiDailyLimit: number;
+}
+
+export const ROLE_DEFAULT_PERMISSIONS: Record<Role, UserPermissions> = {
+  USER: {
+    canDownload: true,
+    canDirectDownload: false,
+    canUploadPrivate: false,
+    canModerate: false,
+    canAdmin: false,
+    canUseChat: true,
+    canSendChatMessages: true,
+    canCreateChatRooms: false,
+    canModerateChat: false,
+    aiDailyLimit: 20,
+  },
+  MODERATOR: {
+    canDownload: true,
+    canDirectDownload: true,
+    canUploadPrivate: true,
+    canModerate: true,
+    canAdmin: false,
+    canUseChat: true,
+    canSendChatMessages: true,
+    canCreateChatRooms: true,
+    canModerateChat: true,
+    aiDailyLimit: 500,
+  },
+  ADMIN: {
+    canDownload: true,
+    canDirectDownload: true,
+    canUploadPrivate: true,
+    canModerate: true,
+    canAdmin: true,
+    canUseChat: true,
+    canSendChatMessages: true,
+    canCreateChatRooms: true,
+    canModerateChat: true,
+    aiDailyLimit: 9999,
+  },
+  SUPER_ADMIN: {
+    canDownload: true,
+    canDirectDownload: true,
+    canUploadPrivate: true,
+    canModerate: true,
+    canAdmin: true,
+    canUseChat: true,
+    canSendChatMessages: true,
+    canCreateChatRooms: true,
+    canModerateChat: true,
+    aiDailyLimit: 9999,
+  },
+};
+
+export const SUPERUSER_DEFAULT_PERMISSIONS: Partial<UserPermissions> = {
+  canDownload: true,
+  canDirectDownload: true,
+  canUploadPrivate: true,
+  canModerate: false,
+  canAdmin: false,
+  canUseChat: true,
+  canSendChatMessages: true,
+  canCreateChatRooms: true,
+  canModerateChat: false,
+  aiDailyLimit: 1000,
+};
 
 export interface BookEditionContext {
   id: string;
@@ -45,15 +123,65 @@ export function hasMinimumRole(userRole: Role, requiredRole: Role): boolean {
 }
 
 export function canAccessAdmin(user: UserContext): boolean {
+  if (user.permissions?.canAdmin !== undefined) {
+    return user.permissions.canAdmin;
+  }
   return hasMinimumRole(user.role, "ADMIN");
 }
 
 export function canModerate(user: UserContext): boolean {
+  if (user.permissions?.canModerate !== undefined) {
+    return user.permissions.canModerate;
+  }
   return hasMinimumRole(user.role, "MODERATOR");
 }
 
 export function canManageRights(user: UserContext): boolean {
   return hasMinimumRole(user.role, "ADMIN");
+}
+
+export function canUseChat(user: UserContext): boolean {
+  if (user.permissions?.canUseChat !== undefined) {
+    return user.permissions.canUseChat;
+  }
+  return true;
+}
+
+export function canSendChatMessages(user: UserContext): boolean {
+  if (user.permissions?.canSendChatMessages !== undefined) {
+    return user.permissions.canSendChatMessages;
+  }
+  return true;
+}
+
+export function canCreateChatRooms(user: UserContext): boolean {
+  if (user.permissions?.canCreateChatRooms !== undefined) {
+    return user.permissions.canCreateChatRooms;
+  }
+  return user.membershipStatus === "SUPPORTER" || hasMinimumRole(user.role, "MODERATOR");
+}
+
+export function canModerateChat(user: UserContext): boolean {
+  if (user.permissions?.canModerateChat !== undefined) {
+    return user.permissions.canModerateChat;
+  }
+  return hasMinimumRole(user.role, "MODERATOR");
+}
+
+export function hasPermission(user: UserContext, perm: keyof UserPermissions): boolean {
+  if (!user) return false;
+  if (user.permissions && typeof user.permissions[perm] === "boolean") {
+    return user.permissions[perm] as boolean;
+  }
+  const defaultPerms = ROLE_DEFAULT_PERMISSIONS[user.role] || ROLE_DEFAULT_PERMISSIONS.USER;
+  return !!defaultPerms[perm];
+}
+
+export function normalizeRole(role: Role | string, membershipStatus?: string): "admin" | "moderator" | "superuser" | "user" {
+  if (role === "ADMIN" || role === "SUPER_ADMIN" || role === "admin") return "admin";
+  if (role === "MODERATOR" || role === "moderator") return "moderator";
+  if (membershipStatus === "SUPPORTER" || role === "superuser") return "superuser";
+  return "user";
 }
 
 /**

@@ -283,16 +283,20 @@ export default function AdminPage() {
 
   const handleSwitchSession = async (userId: string) => {
     try {
-      const res = await fetch("/api/auth/active-user", {
+      const res = await fetch("/api/auth/impersonate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({ targetUserId: userId }),
       });
       if (res.ok) {
         const data = await res.json();
-        setActiveUser(data.user);
-        setUserMessage(`Munkamenet átváltva: ${data.user.name} (${data.user.role.toUpperCase()})`);
-        setTimeout(() => setUserMessage(null), 4000);
+        setUserMessage(`Imperszonáció aktív: ${data.targetUser.displayName}. Átirányítás a főoldalra...`);
+        setTimeout(() => {
+          window.location.href = "/";
+        }, 1200);
+      } else {
+        const err = await res.json();
+        setUserMessage("Hiba: " + err.error);
       }
     } catch (err: any) {
       setUserMessage("Hiba az átváltáskor: " + err.message);
@@ -638,6 +642,50 @@ export default function AdminPage() {
                             className="rounded text-primary focus:ring-primary w-4 h-4 cursor-pointer"
                           />
                           <span>Admin pult</span>
+                        </label>
+
+                        {/* canUseChat */}
+                        <label className="flex items-center gap-2 text-xs font-medium text-foreground cursor-pointer bg-card/70 p-2.5 rounded-xl border border-border/40 hover:border-border">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(u.permissions?.canUseChat ?? true)}
+                            onChange={() => handleTogglePermission(u.id, "canUseChat", Boolean(u.permissions?.canUseChat ?? true))}
+                            className="rounded text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                          />
+                          <span>Chat olvasás</span>
+                        </label>
+
+                        {/* canSendChatMessages */}
+                        <label className="flex items-center gap-2 text-xs font-medium text-foreground cursor-pointer bg-card/70 p-2.5 rounded-xl border border-border/40 hover:border-border">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(u.permissions?.canSendChatMessages ?? true)}
+                            onChange={() => handleTogglePermission(u.id, "canSendChatMessages", Boolean(u.permissions?.canSendChatMessages ?? true))}
+                            className="rounded text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                          />
+                          <span>Üzenetküldés</span>
+                        </label>
+
+                        {/* canCreateChatRooms */}
+                        <label className="flex items-center gap-2 text-xs font-medium text-foreground cursor-pointer bg-card/70 p-2.5 rounded-xl border border-border/40 hover:border-border">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(u.permissions?.canCreateChatRooms)}
+                            onChange={() => handleTogglePermission(u.id, "canCreateChatRooms", Boolean(u.permissions?.canCreateChatRooms))}
+                            className="rounded text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                          />
+                          <span>Új szobák</span>
+                        </label>
+
+                        {/* canModerateChat */}
+                        <label className="flex items-center gap-2 text-xs font-medium text-foreground cursor-pointer bg-card/70 p-2.5 rounded-xl border border-border/40 hover:border-border">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(u.permissions?.canModerateChat)}
+                            onChange={() => handleTogglePermission(u.id, "canModerateChat", Boolean(u.permissions?.canModerateChat))}
+                            className="rounded text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                          />
+                          <span>Chat moderáció</span>
                         </label>
                       </div>
 

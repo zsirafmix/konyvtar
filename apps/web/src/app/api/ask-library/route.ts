@@ -3,11 +3,56 @@ import { prisma, isDatabaseConfigured } from "@librarian/database";
 import { queryAskMyLibrary, BookItem } from "@librarian/ai";
 import { getFallbackBookItems } from "@/lib/fallback-books";
 import { searchMegaBooks, toBookCard } from "@/lib/mega-catalog";
+import { requireAuth, createAuditLog } from "@/lib/auth/guards";
+import { checkRateLimit, RATE_LIMIT_CONFIGS, getClientIp } from "@/lib/security/rate-limiter";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await requireAuth(req);
+
+    // Burst rate limit check
+    const ip = getClientIp(req);
+    const rateLimit = checkRateLimit({
+      identifier: `ai_query:${user.id || ip}`,
+      windowMs: RATE_LIMIT_CONFIGS.aiQuery.windowMs,
+      maxRequests: RATE_LIMIT_CONFIGS.aiQuery.maxRequests,
+    });
+
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        { error: `Túl gyors egymásutánban kérdezel az AI-tól. Várj ${rateLimit.retryAfterSeconds} másodpercet.` },
+        { status: 429 }
+      );
+    }
+
+    // Daily limit check in database
+    const dateKey = new Date().toISOString().split("T")[0];
+    const dailyLimit = user.permissions?.aiDailyLimit || 20;
+
+    const currentUsage = await prisma.aiUsage.findUnique({
+      where: {
+        userId_dateKey: {
+          userId: user.id,
+          dateKey,
+        },
+      },
+    });
+
+    const requestsToday = currentUsage?.requestCount || 0;
+    if (requestsToday >= dailyLimit && user.role !== "admin") {
+      return NextResponse.json(
+        {
+          error: `Elérted a napi AI Könyvtáros kérdéskeretedet (${requestsToday}/${dailyLimit}). Támogasd a könyvtárat 1 dollárral az emelt kvótáért a /supporter oldalon!`,
+          dailyLimitReached: true,
+          requestsToday,
+          dailyLimit,
+        },
+        { status: 429 }
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
     const query = body.query || body.question;
 
@@ -20,6 +65,7 @@ export async function POST(req: NextRequest) {
     if (isDatabaseConfigured) {
       try {
         const books = await prisma.book.findMany({
+          take: 50,
           include: {
             authors: { include: { author: true } },
             categories: { include: { category: true } },
@@ -49,7 +95,7 @@ export async function POST(req: NextRequest) {
             seriesPosition: b.series?.[0]?.position,
             coverUrl: b.editions?.[0]?.covers?.[0]?.coverUrl || null,
             distributionStatus: b.editions?.[0]?.distributionStatus || "PRIVATE",
-            publishedYear: b.editions[0]?.publishedYear || null,
+            publishedYear: b.editions?.[0]?.publishedYear || null,
           }));
         }
       } catch (dbErr) {
@@ -69,9 +115,36 @@ export async function POST(req: NextRequest) {
     // Run RAG query grounded in library
     const result = await queryAskMyLibrary(query.trim(), bookItems);
 
-    return NextResponse.json(result);
+    // Increment today's usage in DB
+    await prisma.aiUsage.upsert({
+      where: {
+        userId_dateKey: {
+          userId: user.id,
+          dateKey,
+        },
+      },
+      create: {
+        userId: user.id,
+        dateKey,
+        requestCount: 1,
+        tokensUsed: 150,
+      },
+      update: {
+        requestCount: { increment: 1 },
+        tokensUsed: { increment: 150 },
+      },
+    }).catch(() => {});
+
+    return NextResponse.json({
+      ...result,
+      usage: {
+        usedToday: requestsToday + 1,
+        dailyLimit,
+        remaining: Math.max(0, dailyLimit - (requestsToday + 1)),
+      },
+    });
   } catch (error: any) {
     console.error("Ask My Library hiba:", error);
-    return NextResponse.json({ error: "Nem sikerült feldolgozni a kérdést." }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Nem sikerült feldolgozni a kérdést." }, { status: error.statusCode || 500 });
   }
 }

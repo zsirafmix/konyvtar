@@ -1,18 +1,31 @@
-import { scryptSync, randomBytes, timingSafeEqual } from "node:crypto";
+import bcrypt from "bcryptjs";
+import { scryptSync, timingSafeEqual } from "node:crypto";
+
+const BCRYPT_SALT_ROUNDS = 12;
 
 /**
- * Hash a password using scrypt with a secure 16-byte salt.
+ * Hash a password using bcrypt with work factor 12.
  */
 export function hashPassword(password: string): string {
-  const salt = randomBytes(16).toString("hex");
-  const derivedKey = scryptSync(password, salt, 64);
-  return `${salt}:${derivedKey.toString("hex")}`;
+  return bcrypt.hashSync(password, BCRYPT_SALT_ROUNDS);
 }
 
 /**
- * Verify a plain password against a stored scrypt hash.
+ * Verify a plain password against a stored hash (bcrypt or legacy scrypt).
  */
 export function verifyPassword(password: string, storedHash: string): boolean {
+  if (!password || !storedHash) return false;
+
+  // 1. Bcrypt format ($2a$, $2b$, $2y$)
+  if (storedHash.startsWith("$2")) {
+    try {
+      return bcrypt.compareSync(password, storedHash);
+    } catch {
+      return false;
+    }
+  }
+
+  // 2. Legacy scrypt format (salt:key)
   try {
     const [salt, key] = storedHash.split(":");
     if (!salt || !key) return false;
@@ -23,3 +36,4 @@ export function verifyPassword(password: string, storedHash: string): boolean {
     return false;
   }
 }
+

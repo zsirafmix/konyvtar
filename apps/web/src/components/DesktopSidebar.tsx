@@ -31,13 +31,13 @@ export const DesktopSidebar: React.FC<{ userRole?: string; isSupporter?: boolean
 
   const primaryNav = [
     { label: "Kezdőlap", href: "/", icon: Home },
+    { label: "Katalógus", href: "/library", icon: Library },
+    { label: "Fórum", href: "/forum", icon: MessagesSquare },
+    { label: "Közösségi Chat", href: "/community-chat", icon: Users },
+    { label: "AI Könyvtáros", href: "/chat", icon: Sparkles, isAi: true },
     { label: "Felfedezés", href: "/discover", icon: Compass },
-    { label: "Könyvtáram", href: "/library", icon: Library },
     { label: "Keresés", href: "/search", icon: Search },
-    { label: "Kérdezz a könyvtártól", href: "/ask-library", icon: Sparkles, isAi: true },
-    { label: "Közösség", href: "/community", icon: Users },
-    { label: "Listák", href: "/lists", icon: ListTree },
-    { label: "Könyvklubok", href: "/clubs", icon: MessagesSquare },
+    { label: "Könyvklubok", href: "/clubs", icon: ListTree },
   ];
 
   const libraryShelves = [

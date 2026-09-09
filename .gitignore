@@ -4,3 +4,4 @@ dist/
 .env
 storage_data/
 *.log
+*.tsbuildinfo

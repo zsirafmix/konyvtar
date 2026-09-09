@@ -12,8 +12,8 @@
     "dev": "npm run dev --workspace=@librarian/web",
     "build": "npm run db:generate && npm run build --workspaces --if-present",
     "start": "npm run start --workspace=@librarian/web",
-    "start:render": "npm run start --workspace=@librarian/web",
-    "test": "npm run test --workspaces --if-present",
+    "test": "npx tsx --test tests/system-security.test.mjs",
+    "test:all": "npx tsx --test tests/system-security.test.mjs",
     "lint": "npm run lint --workspaces --if-present",
     "db:generate": "npm run db:generate --workspace=@librarian/database",
     "db:push": "npm run db:push --workspace=@librarian/database",
@@ -21,6 +21,11 @@
     "db:import:mega": "npm run import:mega --workspace=@librarian/web"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "zod": "^4.5.4"
   }
 }

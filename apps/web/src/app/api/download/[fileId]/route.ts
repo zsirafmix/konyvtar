@@ -5,7 +5,8 @@ import { canUserDownload, UserContext } from "@librarian/auth";
 import { defaultStorageManager } from "@librarian/storage";
 import { FALLBACK_BOOKS } from "@/lib/fallback-books";
 import { findFormatById, getMimeType } from "@/lib/mega-catalog";
-import { getActiveUser } from "@/lib/users-store";
+import { requireAuth, requirePermission, createAuditLog } from "@/lib/auth/guards";
+import { checkRateLimit, RATE_LIMIT_CONFIGS, getClientIp } from "@/lib/security/rate-limiter";
 
 export const dynamic = "force-dynamic";
 
@@ -248,22 +249,30 @@ export async function GET(req: NextRequest, { params }: { params: { fileId: stri
   try {
     const { fileId } = params;
 
-    // Retrieve active user from header / cookies or fallback to demo user
-    const requestedUid = req.cookies.get("librarian_uid")?.value || req.headers.get("x-user-id");
-    const activeUser = getActiveUser(requestedUid);
+    // Authenticate user & enforce permissions
+    const user = await requireAuth(req);
+    requirePermission(user, "canDownload");
 
-    // Enforce download permission
-    if (activeUser && activeUser.permissions && !activeUser.permissions.canDownload) {
+    // Rate limiting
+    const ip = getClientIp(req);
+    const rateLimit = checkRateLimit({
+      identifier: `download:${user.id || ip}`,
+      windowMs: RATE_LIMIT_CONFIGS.download.windowMs,
+      maxRequests: RATE_LIMIT_CONFIGS.download.maxRequests,
+    });
+
+    if (!rateLimit.success) {
       return NextResponse.json(
-        { error: "A letöltési jogosultságod jelenleg szüneteltetve van a fiókodon." },
-        { status: 403 }
+        { error: `Túl sok letöltés rövid idő alatt. Kérjük, várj ${rateLimit.retryAfterSeconds} másodpercet.` },
+        { status: 429 }
       );
     }
 
     const currentUser: UserContext = {
-      id: activeUser.id,
-      role: activeUser.role === "admin" ? "ADMIN" : (activeUser.role === "moderator" ? "MODERATOR" : "USER"),
-      membershipStatus: activeUser.membershipStatus,
+      id: user.id,
+      role: user.originalRole || (user.role === "admin" ? "ADMIN" : user.role === "moderator" ? "MODERATOR" : "USER"),
+      membershipStatus: user.membershipStatus,
+      permissions: user.permissions,
     };
 
     // 1. Check if downloading a fallback sample book
@@ -422,7 +431,6 @@ export async function GET(req: NextRequest, { params }: { params: { fileId: stri
     }
 
     // IP hash for audit logging
-    const ip = req.headers.get("x-forwarded-for") || req.ip || "127.0.0.1";
     const ipHash = createHash("sha256").update(ip).digest("hex").substring(0, 16);
 
     // Save DownloadLog

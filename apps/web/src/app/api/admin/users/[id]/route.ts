@@ -1,66 +1,152 @@
 import { NextRequest, NextResponse } from "next/server";
-import { updateUser, deleteUser, getUserById } from "@/lib/users-store";
+import { prisma } from "@librarian/database";
+import { requireAuth, requireRole, createAuditLog } from "@/lib/auth/guards";
+import { Role } from "@librarian/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const user = getUserById(params.id);
-  if (!user) {
-    return NextResponse.json({ error: "A felhasználó nem található" }, { status: 404 });
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const adminUser = await requireAuth(req);
+    requireRole(adminUser, ["admin"]);
+
+    const user = await prisma.user.findUnique({
+      where: { id: params.id },
+      include: {
+        profile: true,
+        permissions: true,
+      },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: "A felhasználó nem található." }, { status: 404 });
+    }
+
+    return NextResponse.json({ user });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: err.statusCode || 500 });
   }
-  return NextResponse.json({ user });
 }
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const adminUser = await requireAuth(req);
+    requireRole(adminUser, ["admin"]);
+
     const { id } = params;
     const body = await req.json();
+    const { name, role, permissions, membershipStatus } = body;
 
-    const updated = updateUser(id, body);
-    if (!updated) {
-      return NextResponse.json({ error: "A felhasználó nem található" }, { status: 404 });
+    const user = await prisma.user.findUnique({
+      where: { id },
+      include: { profile: true, permissions: true },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: "A felhasználó nem található." }, { status: 404 });
     }
+
+    // Role mapping
+    let newDbRole: Role | undefined;
+    if (role) {
+      if (role === "admin") newDbRole = "ADMIN";
+      else if (role === "moderator") newDbRole = "MODERATOR";
+      else newDbRole = "USER";
+    }
+
+    // Update user in transaction
+    await prisma.$transaction(async (tx) => {
+      if (newDbRole) {
+        await tx.user.update({
+          where: { id },
+          data: { role: newDbRole },
+        });
+      }
+
+      if (name) {
+        await tx.userProfile.upsert({
+          where: { userId: id },
+          create: {
+            userId: id,
+            displayName: name.trim(),
+          },
+          update: {
+            displayName: name.trim(),
+          },
+        });
+      }
+
+      if (permissions) {
+        await tx.userPermission.upsert({
+          where: { userId: id },
+          create: {
+            userId: id,
+            ...permissions,
+          },
+          update: {
+            ...permissions,
+          },
+        });
+      }
+
+      if (membershipStatus || role === "superuser") {
+        const status = (role === "superuser" || membershipStatus === "SUPPORTER") ? "SUPPORTER" : "FREE";
+        await tx.membership.upsert({
+          where: { id: `mem_${id}` },
+          create: {
+            id: `mem_${id}`,
+            userId: id,
+            status,
+            startedAt: new Date(),
+          },
+          update: {
+            status,
+          },
+        });
+      }
+    });
+
+    await createAuditLog({
+      userId: adminUser.id,
+      action: "ADMIN_UPDATED_USER",
+      resource: "User",
+      resourceId: id,
+      details: { role, permissions, name },
+      req,
+    });
 
     return NextResponse.json({
       success: true,
-      message: `A(z) „${updated.name}” felhasználó adatai és jogosultságai frissítve!`,
-      user: updated,
+      message: "Felhasználó adatai és jogosultságai sikeresen frissítve!",
     });
   } catch (err: any) {
-    return NextResponse.json(
-      { error: "Hiba a felhasználó frissítésekor: " + err.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: err.message }, { status: err.statusCode || 500 });
   }
 }
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const adminUser = await requireAuth(req);
+    requireRole(adminUser, ["admin"]);
+
     const { id } = params;
-    const ok = deleteUser(id);
-    if (!ok) {
-      return NextResponse.json(
-        { error: "A felhasználó nem törölhető vagy nem található (a főadmin védett)." },
-        { status: 400 }
-      );
+
+    if (id === adminUser.id) {
+      return NextResponse.json({ error: "Nem törölheted a saját admin fiókodat!" }, { status: 400 });
     }
-    return NextResponse.json({
-      success: true,
-      message: "Felhasználó sikeresen eltávolítva!",
+
+    await prisma.user.delete({ where: { id } });
+
+    await createAuditLog({
+      userId: adminUser.id,
+      action: "ADMIN_DELETED_USER",
+      resource: "User",
+      resourceId: id,
+      req,
     });
+
+    return NextResponse.json({ success: true, message: "Felhasználó sikeresen eltávolítva." });
   } catch (err: any) {
-    return NextResponse.json(
-      { error: "Hiba a törlés során: " + err.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: err.message }, { status: err.statusCode || 500 });
   }
 }

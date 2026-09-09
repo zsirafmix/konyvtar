@@ -22,29 +22,54 @@ export default function SupporterPage() {
   const [provider, setProvider] = useState<"paypal" | "revolut">("paypal");
   const [processing, setProcessing] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
-  const [userEmail, setUserEmail] = useState("");
+  const [orderIdInput, setOrderIdInput] = useState("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState("");
+
+  React.useEffect(() => {
+    async function loadAuth() {
+      try {
+        const res = await fetch("/api/auth/me");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.user?.email) {
+            setUserEmail(data.user.email);
+          }
+          if (data.user?.role === "superuser" || data.user?.membershipStatus === "SUPPORTER") {
+            setSubscribed(true);
+          }
+        }
+      } catch {}
+    }
+    loadAuth();
+  }, []);
 
   const handlePayPalPayment = async () => {
     setProcessing(true);
+    setErrorMessage(null);
+
+    // Generate or use user-provided order ID
+    const orderIdToVerify = orderIdInput.trim() || `PP-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`;
+
     try {
       const res = await fetch("/api/payments/paypal/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          orderId: `PP-${Date.now()}`,
-          email: userEmail.trim() || undefined,
-          amountUSD: 1,
+          orderId: orderIdToVerify,
         }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
+      const data = await res.json();
+      if (res.ok && data.success) {
         setSubscribed(true);
         setSuccessMessage(data.message || "Sikeres fizetés! A fiókod mostantól Superuser rangú.");
+      } else {
+        setErrorMessage(data.error || "A fizetés hitelesítése sikertelen.");
       }
     } catch (err: any) {
-      alert("Hiba a fizetés feldolgozásakor: " + err.message);
+      setErrorMessage("Hálózati hiba: " + err.message);
     } finally {
       setProcessing(false);
     }
@@ -52,27 +77,30 @@ export default function SupporterPage() {
 
   const handleRevolutPayment = async () => {
     setProcessing(true);
+    setErrorMessage(null);
     try {
       const res = await fetch("/api/payments/revolut", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "confirm_transfer",
-          email: userEmail.trim() || undefined,
         }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
+      const data = await res.json();
+      if (res.ok && data.success) {
         setSubscribed(true);
-        setSuccessMessage(data.message || "Sikeres Revolut fizetés regisztrálva! A fiókod Superuser rangú.");
+        setSuccessMessage(data.message || "Sikeres Revolut fizetés! A fiókod mostantól Superuser rangú.");
+      } else {
+        setErrorMessage(data.error || "A fizetés feldolgozása sikertelen.");
       }
     } catch (err: any) {
-      alert("Hiba: " + err.message);
+      setErrorMessage("Hiba: " + err.message);
     } finally {
       setProcessing(false);
     }
   };
+
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12 space-y-12 pb-24">

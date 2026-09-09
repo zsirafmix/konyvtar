@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search, Sun, Moon, Cloud, ShieldCheck, User, Crown, Shield, Sparkles } from "lucide-react";
+import { Search, Sun, Moon, Cloud, ShieldCheck, User, Crown, Shield, Sparkles, LogOut } from "lucide-react";
 
 export const Header: React.FC = () => {
   const router = useRouter();
@@ -124,7 +124,7 @@ export const Header: React.FC = () => {
         <Link
           href="/profile"
           className="flex items-center gap-2 p-1.5 rounded-full hover:bg-accent transition-colors"
-          title={activeUser ? `${activeUser.name} (${activeUser.role})` : "Profil"}
+          title={activeUser ? `${activeUser.displayName || activeUser.name} (${role})` : "Profil"}
         >
           <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
             role === "admin"
@@ -138,6 +138,22 @@ export const Header: React.FC = () => {
             {role === "admin" ? "👑" : role === "superuser" ? "⭐" : role === "moderator" ? "🛡️" : <User className="w-4 h-4" />}
           </div>
         </Link>
+
+        {/* Quick Logout */}
+        <button
+          onClick={async () => {
+            try {
+              await fetch("/api/auth/logout", { method: "POST" });
+              window.location.href = "/login";
+            } catch {
+              window.location.href = "/login";
+            }
+          }}
+          className="p-2 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
+          title="Kijelentkezés"
+        >
+          <LogOut className="w-4 h-4" />
+        </button>
       </div>
     </header>
   );
