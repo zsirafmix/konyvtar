@@ -96,6 +96,10 @@ export function checkRateLimit(options: RateLimitOptions): RateLimitResult {
   };
 }
 
+export function resetRateLimit(identifier: string): void {
+  storage.delete(identifier);
+}
+
 /**
  * Helper to extract client IP from Next.js request headers
  */
@@ -112,11 +116,11 @@ export function getClientIp(req: Request): string {
 }
 
 export const RATE_LIMIT_CONFIGS = {
-  login: { windowMs: 15 * 60 * 1000, maxRequests: 5 }, // 5 attempts per 15 min (brute force protection)
-  register: { windowMs: 60 * 60 * 1000, maxRequests: 5 }, // 5 registers per hour
+  login: { windowMs: 15 * 60 * 1000, maxRequests: 15 }, // 15 attempts per 15 min (brute force protection)
+  register: { windowMs: 60 * 60 * 1000, maxRequests: 10 }, // 10 registers per hour
   chatMessage: { windowMs: 60 * 1000, maxRequests: 30 }, // 30 messages per min (1 every 2s average)
-  forumPost: { windowMs: 5 * 60 * 1000, maxRequests: 5 }, // 5 topics/posts per 5 min
-  paymentVerify: { windowMs: 60 * 60 * 1000, maxRequests: 10 }, // 10 verifications per hour
-  aiQuery: { windowMs: 60 * 1000, maxRequests: 15 }, // 15 bursts per min
-  download: { windowMs: 60 * 1000, maxRequests: 20 }, // 20 downloads per min
+  forumPost: { windowMs: 5 * 60 * 1000, maxRequests: 10 }, // 10 topics/posts per 5 min
+  paymentVerify: { windowMs: 60 * 60 * 1000, maxRequests: 15 }, // 15 verifications per hour
+  aiQuery: { windowMs: 60 * 1000, maxRequests: 20 }, // 20 bursts per min
+  download: { windowMs: 60 * 1000, maxRequests: 30 }, // 30 downloads per min
 };

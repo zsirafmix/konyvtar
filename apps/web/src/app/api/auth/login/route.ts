@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma, isDatabaseConfigured } from "@librarian/database";
 import { verifyPassword, hashPassword, ROLE_DEFAULT_PERMISSIONS } from "@librarian/auth";
-import { checkRateLimit, RATE_LIMIT_CONFIGS, getClientIp } from "@/lib/security/rate-limiter";
+import { checkRateLimit, resetRateLimit, RATE_LIMIT_CONFIGS, getClientIp } from "@/lib/security/rate-limiter";
 import {
   createSession,
   SESSION_COOKIE_NAME,
@@ -85,6 +85,7 @@ export async function POST(req: NextRequest) {
       if (demoUser) {
         const isMatch = password === demoUser.password || verifyPassword(password, demoUser.password);
         if (isMatch) {
+          resetRateLimit(`login:${ip}`);
           const { token, expiresAt } = await createSession(demoUser.id, req, demoUser);
           const response = NextResponse.json({
             success: true,
@@ -180,6 +181,7 @@ export async function POST(req: NextRequest) {
     };
 
     // Create session in DB with fallback
+    resetRateLimit(`login:${ip}`);
     const { token, expiresAt } = await createSession(user.id, req, userObj as any);
 
     await createAuditLog({
