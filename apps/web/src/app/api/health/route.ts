@@ -23,6 +23,7 @@ export async function GET() {
 
   return NextResponse.json({
     status: "ok",
+    version: "1.2.0-standalone-fix",
     timestamp: new Date().toISOString(),
     catalog: {
       status: "online",
