@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma } from "@librarian/database";
-import { verifyPassword, hashPassword } from "@librarian/auth";
+import { prisma, isDatabaseConfigured } from "@librarian/database";
+import { verifyPassword, hashPassword, ROLE_DEFAULT_PERMISSIONS } from "@librarian/auth";
 import { checkRateLimit, RATE_LIMIT_CONFIGS, getClientIp } from "@/lib/security/rate-limiter";
-import { createSession, SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS, normalizeRole, ensureUserPermissions } from "@/lib/auth/session";
+import {
+  createSession,
+  SESSION_COOKIE_NAME,
+  SESSION_MAX_AGE_SECONDS,
+  normalizeRole,
+  ensureUserPermissions,
+  DEMO_FALLBACK_USERS,
+} from "@/lib/auth/session";
 import { createAuditLog } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
@@ -41,28 +48,70 @@ export async function POST(req: NextRequest) {
     }
 
     const { identifier, password } = parsed.data;
-    const normalizedIdentifier = identifier.toLowerCase();
+    const normalizedIdentifier = identifier.toLowerCase().trim();
 
-    // Look up by email first, or by profile displayName
-    const user = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { email: normalizedIdentifier },
-          { profile: { displayName: { equals: identifier, mode: "insensitive" } } },
-        ],
-      },
-      include: {
-        profile: true,
-        permissions: true,
-        memberships: {
-          where: { status: "SUPPORTER" },
-          take: 1,
-        },
-      },
-    });
+    let user: any = null;
+    if (isDatabaseConfigured) {
+      try {
+        user = await prisma.user.findFirst({
+          where: {
+            OR: [
+              { email: normalizedIdentifier },
+              { profile: { displayName: { equals: identifier, mode: "insensitive" } } },
+            ],
+          },
+          include: {
+            profile: true,
+            permissions: true,
+            memberships: {
+              where: { status: "SUPPORTER" },
+              take: 1,
+            },
+          },
+        });
+      } catch (dbErr: any) {
+        console.warn("Prisma user lookup error, falling back to demo users:", dbErr.message);
+      }
+    }
 
-    // Neutral error message to prevent user enumeration
+    // If user not found in DB (or DB offline on Render standalone mode), check DEMO_FALLBACK_USERS
     if (!user) {
+      const demoUser = DEMO_FALLBACK_USERS.find(
+        (u) =>
+          u.email.toLowerCase() === normalizedIdentifier ||
+          u.displayName.toLowerCase() === identifier.toLowerCase()
+      );
+
+      if (demoUser) {
+        const isMatch = password === demoUser.password || verifyPassword(password, demoUser.password);
+        if (isMatch) {
+          const { token, expiresAt } = await createSession(demoUser.id, req, demoUser);
+          const response = NextResponse.json({
+            success: true,
+            message: "Sikeres bejelentkezés!",
+            user: {
+              id: demoUser.id,
+              email: demoUser.email,
+              displayName: demoUser.displayName,
+              role: demoUser.role,
+              membershipStatus: demoUser.membershipStatus,
+              permissions: demoUser.permissions,
+            },
+          });
+
+          response.cookies.set(SESSION_COOKIE_NAME, token, {
+            path: "/",
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            maxAge: SESSION_MAX_AGE_SECONDS,
+            expires: expiresAt,
+          });
+
+          return response;
+        }
+      }
+
       await createAuditLog({
         userId: null,
         action: "LOGIN_FAILED",
@@ -108,14 +157,30 @@ export async function POST(req: NextRequest) {
     }
 
     // Ensure permissions record exists
-    const permissions = await ensureUserPermissions(user.id, user.role);
-
-    // Create session in DB (session rotation)
-    const { token, expiresAt } = await createSession(user.id, req);
+    let permissions = user.permissions;
+    try {
+      permissions = await ensureUserPermissions(user.id, user.role);
+    } catch {
+      // ignore
+    }
 
     const isSupporter = user.memberships && user.memberships.length > 0;
     const membershipStatus = isSupporter ? "SUPPORTER" : "FREE";
     const role = normalizeRole(user.role, membershipStatus);
+
+    const userObj = {
+      id: user.id,
+      email: user.email,
+      role,
+      originalRole: user.role,
+      membershipStatus,
+      displayName: user.profile?.displayName || user.email.split("@")[0],
+      avatarUrl: user.profile?.avatarUrl || undefined,
+      permissions: permissions || (ROLE_DEFAULT_PERMISSIONS as any)[user.role] || (ROLE_DEFAULT_PERMISSIONS as any).USER,
+    };
+
+    // Create session in DB with fallback
+    const { token, expiresAt } = await createSession(user.id, req, userObj as any);
 
     await createAuditLog({
       userId: user.id,

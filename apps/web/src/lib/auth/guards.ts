@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@librarian/database";
+import { prisma, isDatabaseConfigured } from "@librarian/database";
 import { UserPermissions } from "@librarian/auth";
 import {
   SESSION_COOKIE_NAME,
@@ -84,6 +84,9 @@ export async function createAuditLog(options: {
   details?: Record<string, any>;
   req?: Request;
 }): Promise<void> {
+  if (!isDatabaseConfigured) {
+    return;
+  }
   try {
     const ipAddress = options.req ? getClientIp(options.req) : null;
     
