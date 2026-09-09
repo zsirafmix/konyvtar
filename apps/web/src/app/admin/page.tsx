@@ -31,6 +31,9 @@ import {
   Trash2,
   Save,
   Search,
+  UploadCloud,
+  FileUp,
+  Image as ImageIcon,
 } from "lucide-react";
 
 export default function AdminPage() {
@@ -61,6 +64,91 @@ export default function AdminPage() {
   const [importSuccessMessage, setImportSuccessMessage] = useState<string | null>(null);
   const [importErrorMessage, setImportErrorMessage] = useState<string | null>(null);
   const [newlyImportedBooks, setNewlyImportedBooks] = useState<any[]>([]);
+
+  // New Book Upload Modal state
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadTitle, setUploadTitle] = useState("");
+  const [uploadAuthor, setUploadAuthor] = useState("");
+  const [uploadGenre, setUploadGenre] = useState("Sci-Fi");
+  const [uploadYear, setUploadYear] = useState(new Date().getFullYear().toString());
+  const [uploadDescription, setUploadDescription] = useState("");
+  const [uploadCoverUrl, setUploadCoverUrl] = useState("");
+  const [uploadCoverFile, setUploadCoverFile] = useState<File | null>(null);
+  const [uploadBookFile, setUploadBookFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadSuccessBook, setUploadSuccessBook] = useState<any | null>(null);
+
+  const handleBookFileSelect = (file: File) => {
+    setUploadBookFile(file);
+    const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+    if (nameWithoutExt.includes(" - ")) {
+      const parts = nameWithoutExt.split(" - ");
+      if (!uploadAuthor && parts[0]) setUploadAuthor(parts[0].trim());
+      if (!uploadTitle && parts[1]) setUploadTitle(parts[1].trim());
+    } else if (!uploadTitle) {
+      setUploadTitle(nameWithoutExt);
+    }
+  };
+
+  const handleResetUploadForm = () => {
+    setUploadTitle("");
+    setUploadAuthor("");
+    setUploadGenre("Sci-Fi");
+    setUploadYear(new Date().getFullYear().toString());
+    setUploadDescription("");
+    setUploadCoverUrl("");
+    setUploadCoverFile(null);
+    setUploadBookFile(null);
+    setUploadError(null);
+    setUploadSuccessBook(null);
+  };
+
+  const handleSubmitUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!uploadTitle.trim()) {
+      setUploadError("A könyv címének megadása kötelező.");
+      return;
+    }
+    setUploading(true);
+    setUploadError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("title", uploadTitle.trim());
+      formData.append("author", uploadAuthor.trim() || "Ismeretlen szerző");
+      formData.append("genre", uploadGenre);
+      formData.append("publishedYear", uploadYear || new Date().getFullYear().toString());
+      formData.append("description", uploadDescription.trim());
+      if (uploadCoverUrl.trim()) {
+        formData.append("coverUrl", uploadCoverUrl.trim());
+      }
+      if (uploadCoverFile) {
+        formData.append("coverFile", uploadCoverFile);
+      }
+      if (uploadBookFile) {
+        formData.append("bookFile", uploadBookFile);
+      }
+
+      const res = await fetch("/api/admin/upload-book", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setUploadError(data.error || "Hiba történt a könyv feltöltése során.");
+      } else {
+        setUploadSuccessBook(data.book);
+        setUserMessage(`A(z) „${uploadTitle}” sikeresen feltöltve a könyvtárba és a MEGA tárhelyre!`);
+        await loadAllAdminData();
+      }
+    } catch (err: any) {
+      setUploadError("Hálózati hiba a feltöltés során: " + err.message);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   useEffect(() => {
     loadAllAdminData();
@@ -315,13 +403,26 @@ export default function AdminPage() {
           <h1 className="text-3xl font-extrabold text-foreground tracking-tight">Adminisztráció</h1>
         </div>
 
-        <button
-          onClick={loadAllAdminData}
-          className="px-3.5 py-2 rounded-xl bg-secondary hover:bg-accent text-secondary-foreground text-xs font-medium flex items-center gap-2 transition-colors"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-          <span>Frissítés</span>
-        </button>
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => {
+              handleResetUploadForm();
+              setShowUploadModal(true);
+            }}
+            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold flex items-center gap-2 transition-all shadow-md hover:shadow-emerald-600/20 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Új könyv feltöltése</span>
+          </button>
+
+          <button
+            onClick={loadAllAdminData}
+            className="px-3.5 py-2 rounded-xl bg-secondary hover:bg-accent text-secondary-foreground text-xs font-medium flex items-center gap-2 transition-colors cursor-pointer"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+            <span>Frissítés</span>
+          </button>
+        </div>
       </div>
 
       {userMessage && (
@@ -1164,6 +1265,270 @@ export default function AdminPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Upload Book Modal */}
+      {showUploadModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-card border border-border rounded-3xl max-w-2xl w-full p-6 sm:p-8 space-y-6 shadow-2xl relative animate-in fade-in zoom-in-95 my-8">
+            {/* Close button */}
+            <button
+              onClick={() => {
+                setShowUploadModal(false);
+                handleResetUploadForm();
+              }}
+              className="absolute right-5 top-5 p-2 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Title */}
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-500 border border-emerald-500/25">
+                <UploadCloud className="w-3.5 h-3.5" />
+                <span>KÖZVETLEN MEGA FELHŐTÁR FELTÖLTÉS</span>
+              </div>
+              <h2 className="text-2xl font-black text-foreground tracking-tight">
+                Új könyv feltöltése a könyvtárba
+              </h2>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                Tölts fel egy e-könyv fájlt (EPUB, PDF, MOBI), és add meg a kötet adatait. A könyv azonnal megjelenik a főoldal „Újonnan feltöltött könyvek” polcán!
+              </p>
+            </div>
+
+            {uploadError && (
+              <div className="p-4 rounded-2xl bg-destructive/15 border border-destructive/30 text-xs sm:text-sm text-destructive font-medium">
+                {uploadError}
+              </div>
+            )}
+
+            {uploadSuccessBook ? (
+              <div className="p-6 rounded-2xl bg-emerald-500/10 border-2 border-emerald-500/30 text-center space-y-4 animate-in fade-in">
+                <div className="w-14 h-14 rounded-full bg-emerald-500 text-white mx-auto flex items-center justify-center font-bold text-2xl shadow-lg">
+                  ✓
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400">
+                    Könyv sikeresen feltöltve és aktiválva!
+                  </h3>
+                  <p className="text-sm text-foreground font-semibold">
+                    „{uploadSuccessBook.title}” — {uploadSuccessBook.author || "Ismeretlen"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    A kötet azonnal elérhető a könyvtárban, és a főoldalon a legfrissebb könyvek élén szerepel.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap justify-center gap-3 pt-2">
+                  <Link
+                    href={`/book/${uploadSuccessBook.slug}`}
+                    className="px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:opacity-90 transition-opacity"
+                  >
+                    Könyv adatlapjának megnyitása
+                  </Link>
+                  <Link
+                    href="/"
+                    className="px-4 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-xs font-bold hover:bg-accent transition-colors"
+                  >
+                    Főoldal megtekintése
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={handleResetUploadForm}
+                    className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Másik könyv feltöltése
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmitUpload} className="space-y-5">
+                {/* File Dropzone */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-foreground block">
+                    E-könyv fájl kiválasztása (EPUB, PDF, MOBI, AZW3) *
+                  </label>
+                  <div className="border-2 border-dashed border-border rounded-2xl p-4 sm:p-6 text-center hover:border-primary/50 transition-colors bg-secondary/30 relative">
+                    <input
+                      type="file"
+                      accept=".epub,.pdf,.mobi,.azw3,.prc"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleBookFileSelect(file);
+                      }}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                    <FileUp className="w-8 h-8 text-primary mx-auto mb-2 opacity-80" />
+                    {uploadBookFile ? (
+                      <div className="space-y-1">
+                        <p className="text-xs font-bold text-emerald-500">
+                          Kiválasztva: {uploadBookFile.name}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {(uploadBookFile.size / (1024 * 1024)).toFixed(2)} MB • Kattints a cseréhez
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <p className="text-xs font-bold text-foreground">
+                          Húzd ide a fájlt, vagy kattints a tallózáshoz
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          A cím és a szerző automatikusan felismerésre kerül a fájlnévből
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Title & Author Inputs */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-foreground">Könyv címe *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Pl. Alapítvány és Birodalom"
+                      value={uploadTitle}
+                      onChange={(e) => setUploadTitle(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-secondary/60 border border-border text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-foreground">Szerző</label>
+                    <input
+                      type="text"
+                      placeholder="Pl. Isaac Asimov"
+                      value={uploadAuthor}
+                      onChange={(e) => setUploadAuthor(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-secondary/60 border border-border text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+
+                {/* Genre & Published Year */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-foreground">Műfaj / Kategória</label>
+                    <select
+                      value={uploadGenre}
+                      onChange={(e) => setUploadGenre(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-secondary/60 border border-border text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      {[
+                        "Sci-Fi",
+                        "Fantasy",
+                        "Krimi & Bűnügyi",
+                        "Kalandregény",
+                        "Magyar Irodalom",
+                        "Horror & Thriller",
+                        "Romantikus",
+                        "Történelmi Regény",
+                        "Humor & Szatíra",
+                        "Világirodalom",
+                        "Ifjúsági & Családi",
+                        "Disztópia",
+                        "Kiberpunk",
+                        "Filozófia",
+                        "Ismeretterjesztő & Tudomány",
+                        "Általános",
+                      ].map((g) => (
+                        <option key={g} value={g}>
+                          {g}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-foreground">Kiadás éve</label>
+                    <input
+                      type="number"
+                      placeholder="2024"
+                      value={uploadYear}
+                      onChange={(e) => setUploadYear(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-secondary/60 border border-border text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+
+                {/* Cover selection */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-foreground block">Borítókép (opcionális)</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <span className="text-[11px] text-muted-foreground block">Képfájl feltöltése (.jpg, .png):</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) setUploadCoverFile(f);
+                        }}
+                        className="text-xs text-muted-foreground file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-primary-foreground hover:file:opacity-90 cursor-pointer"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[11px] text-muted-foreground block">Vagy borító képlink (URL):</span>
+                      <input
+                        type="url"
+                        placeholder="https://images.unsplash.com/..."
+                        value={uploadCoverUrl}
+                        onChange={(e) => setUploadCoverUrl(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl bg-secondary/60 border border-border text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-foreground">Leírás / Fülszöveg (opcionális)</label>
+                  <textarea
+                    rows={3}
+                    placeholder="Rövid cselekmény-összefoglaló az olvasóknak..."
+                    value={uploadDescription}
+                    onChange={(e) => setUploadDescription(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-secondary/60 border border-border text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+                  />
+                </div>
+
+                {/* Submit button */}
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowUploadModal(false);
+                      handleResetUploadForm();
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-xs font-bold hover:bg-accent transition-colors cursor-pointer"
+                  >
+                    Mégse
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={uploading}
+                    className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold flex items-center gap-2 transition-all shadow-lg hover:shadow-emerald-600/25 cursor-pointer disabled:opacity-50"
+                  >
+                    {uploading ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Feltöltés a MEGA-ra...</span>
+                      </>
+                    ) : (
+                      <>
+                        <UploadCloud className="w-4 h-4" />
+                        <span>Könyv mentése és közzététele</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

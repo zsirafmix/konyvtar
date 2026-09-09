@@ -138,12 +138,183 @@ interface FallbackSessionRecord {
 declare global {
   // eslint-disable-next-line no-var
   var fallbackSessionsGlobal: Map<string, FallbackSessionRecord> | undefined;
+  // eslint-disable-next-line no-var
+  var fallbackUsersGlobal: Array<AuthenticatedUser & { password: string }> | undefined;
 }
 
 const fallbackSessions: Map<string, FallbackSessionRecord> =
   globalThis.fallbackSessionsGlobal ?? new Map();
 
 globalThis.fallbackSessionsGlobal = fallbackSessions;
+
+const fallbackUsers: Array<AuthenticatedUser & { password: string }> =
+  globalThis.fallbackUsersGlobal ?? [...DEMO_FALLBACK_USERS];
+
+globalThis.fallbackUsersGlobal = fallbackUsers;
+
+export function getFallbackUsers(): Array<AuthenticatedUser & { password: string }> {
+  return globalThis.fallbackUsersGlobal ?? fallbackUsers;
+}
+
+export function promoteUserToSuperuser(userIdOrEmail: string): boolean {
+  const users = getFallbackUsers();
+  const search = userIdOrEmail.trim().toLowerCase();
+  const target = users.find((u) => u.id === search || u.email.toLowerCase() === search);
+
+  if (!target) {
+    const newUser: AuthenticatedUser & { password: string } = {
+      id: `usr_${Date.now().toString(36)}`,
+      email: search.includes("@") ? search : `${search}@librarian.ai`,
+      password: "UserPassword123!",
+      role: "superuser",
+      originalRole: "USER",
+      membershipStatus: "SUPPORTER",
+      displayName: search.includes("@") ? search.split("@")[0] : "Támogató",
+      avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
+      createdAt: new Date().toISOString(),
+      permissions: {
+        canDownload: true,
+        canDirectDownload: true,
+        canUploadPrivate: true,
+        canModerate: false,
+        canAdmin: false,
+        canUseChat: true,
+        canSendChatMessages: true,
+        canCreateChatRooms: true,
+        canModerateChat: false,
+        aiDailyLimit: 1000,
+      },
+    };
+    users.push(newUser);
+    return true;
+  }
+
+  if (target.role !== "admin") {
+    target.role = "superuser";
+  }
+  target.membershipStatus = "SUPPORTER";
+  target.permissions = {
+    ...target.permissions,
+    canDownload: true,
+    canDirectDownload: true,
+    canUploadPrivate: true,
+    canUseChat: true,
+    canSendChatMessages: true,
+    canCreateChatRooms: true,
+    aiDailyLimit: target.role === "admin" ? 9999 : 1000,
+  };
+
+  if (globalThis.fallbackSessionsGlobal) {
+    for (const record of globalThis.fallbackSessionsGlobal.values()) {
+      if (record.user.id === target.id || record.user.email.toLowerCase() === target.email.toLowerCase()) {
+        record.user.role = target.role;
+        record.user.membershipStatus = "SUPPORTER";
+        record.user.permissions = { ...target.permissions };
+      }
+    }
+  }
+
+  return true;
+}
+
+export function updateFallbackUser(
+  userId: string,
+  data: {
+    name?: string;
+    role?: "admin" | "moderator" | "superuser" | "user";
+    permissions?: Partial<UserPermissions>;
+    membershipStatus?: string;
+  }
+): AuthenticatedUser | null {
+  const users = getFallbackUsers();
+  const target = users.find((u) => u.id === userId);
+  if (!target) return null;
+
+  if (data.name) target.displayName = data.name;
+  if (data.role) {
+    target.role = data.role;
+    if (data.role === "superuser") target.membershipStatus = "SUPPORTER";
+    else if (data.role === "user" && !data.membershipStatus) target.membershipStatus = "FREE";
+  }
+  if (data.membershipStatus) {
+    target.membershipStatus = data.membershipStatus === "SUPPORTER" ? "SUPPORTER" : "FREE";
+    if (data.membershipStatus === "SUPPORTER" && target.role === "user") {
+      target.role = "superuser";
+    }
+  }
+  if (data.permissions) {
+    target.permissions = { ...target.permissions, ...data.permissions };
+  }
+
+  if (globalThis.fallbackSessionsGlobal) {
+    for (const record of globalThis.fallbackSessionsGlobal.values()) {
+      if (record.user.id === target.id) {
+        record.user.displayName = target.displayName;
+        record.user.role = target.role;
+        record.user.membershipStatus = target.membershipStatus;
+        record.user.permissions = { ...target.permissions };
+      }
+    }
+  }
+
+  return target;
+}
+
+export function createFallbackUser(data: {
+  email: string;
+  name?: string;
+  role?: "admin" | "moderator" | "superuser" | "user";
+  permissions?: Partial<UserPermissions>;
+}): AuthenticatedUser {
+  const users = getFallbackUsers();
+  const cleanEmail = data.email.trim().toLowerCase();
+  const existing = users.find((u) => u.email.toLowerCase() === cleanEmail);
+  if (existing) {
+    return existing;
+  }
+
+  const role = data.role || "user";
+  const membershipStatus = role === "superuser" ? "SUPPORTER" : "FREE";
+  const defaultAiLimit = role === "admin" ? 9999 : role === "superuser" ? 1000 : role === "moderator" ? 500 : 20;
+
+  const newUser: AuthenticatedUser & { password: string } = {
+    id: `usr_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`,
+    email: cleanEmail,
+    password: "UserPassword123!",
+    role,
+    originalRole: role === "admin" ? "ADMIN" : role === "moderator" ? "MODERATOR" : "USER",
+    membershipStatus,
+    displayName: data.name?.trim() || cleanEmail.split("@")[0],
+    avatarUrl: "/avatars/user.png",
+    createdAt: new Date().toISOString(),
+    permissions: {
+      canDownload: true,
+      canDirectDownload: role === "admin" || role === "superuser",
+      canUploadPrivate: role === "admin" || role === "superuser",
+      canModerate: role === "admin" || role === "moderator",
+      canAdmin: role === "admin",
+      canUseChat: true,
+      canSendChatMessages: true,
+      canCreateChatRooms: role === "admin" || role === "moderator" || role === "superuser",
+      canModerateChat: role === "admin" || role === "moderator",
+      aiDailyLimit: defaultAiLimit,
+      ...(data.permissions || {}),
+    },
+  };
+
+  users.push(newUser);
+  return newUser;
+}
+
+export function deleteFallbackUser(userId: string): boolean {
+  const users = getFallbackUsers();
+  const idx = users.findIndex((u) => u.id === userId);
+  if (idx !== -1) {
+    users.splice(idx, 1);
+    return true;
+  }
+  return false;
+}
 
 /**
  * Maps database Role enum to lowercase UserRole
@@ -401,7 +572,7 @@ export async function validateSessionToken(token: string, impersonateUserId?: st
     }
 
     if (inMem.user.role === "admin" && impersonateUserId && impersonateUserId !== inMem.user.id) {
-      const targetUser = DEMO_FALLBACK_USERS.find(
+      const targetUser = getFallbackUsers().find(
         (u) => u.id === impersonateUserId || u.email === impersonateUserId
       );
       if (targetUser) {

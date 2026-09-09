@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@librarian/database";
+import { prisma, isDatabaseConfigured } from "@librarian/database";
 import { requireAuth, requireRole, createAuditLog } from "@/lib/auth/guards";
 import { hashPassword, ROLE_DEFAULT_PERMISSIONS, Role } from "@librarian/auth";
-import { normalizeRole, ensureUserPermissions } from "@/lib/auth/session";
+import { normalizeRole, ensureUserPermissions, getFallbackUsers, createFallbackUser } from "@/lib/auth/session";
 import { sanitizeDisplayName } from "@/lib/security/sanitize";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +11,27 @@ export async function GET(req: NextRequest) {
   try {
     const activeUser = await requireAuth(req);
     requireRole(activeUser, ["admin"]);
+
+    if (!isDatabaseConfigured) {
+      const fallbackUsers = getFallbackUsers();
+      const users = fallbackUsers.map((u) => ({
+        id: u.id,
+        name: u.displayName || u.email.split("@")[0],
+        email: u.email,
+        role: u.role,
+        originalRole: u.originalRole,
+        membershipStatus: u.membershipStatus,
+        createdAt: u.createdAt,
+        avatarUrl: u.avatarUrl || "/avatars/user.png",
+        permissions: u.permissions,
+      }));
+
+      return NextResponse.json({
+        users,
+        activeUser,
+        auditLogs: [],
+      });
+    }
 
     const [dbUsers, auditLogs] = await Promise.all([
       prisma.user.findMany({
@@ -109,6 +130,21 @@ export async function POST(req: NextRequest) {
 
     const cleanEmail = email.trim().toLowerCase();
     const cleanName = sanitizeDisplayName(name || "Új Felhasználó");
+
+    if (!isDatabaseConfigured) {
+      const newUser = createFallbackUser({
+        name: cleanName,
+        email: cleanEmail,
+        role,
+        permissions,
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `A(z) „${cleanName}” felhasználó sikeresen létrehozva (${role})!`,
+        user: newUser,
+      });
+    }
 
     const existing = await prisma.user.findUnique({ where: { email: cleanEmail } });
     if (existing) {

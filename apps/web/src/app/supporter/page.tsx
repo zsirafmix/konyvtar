@@ -1,33 +1,35 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   Award,
   Check,
   Sparkles,
   ShieldCheck,
   CreditCard,
-  QrCode,
   Lock,
   ArrowRight,
   Zap,
   CheckCircle2,
-  Crown,
-  Shield,
-  HelpCircle,
+  ExternalLink,
+  Info,
 } from "lucide-react";
 
-export default function SupporterPage() {
+function SupporterContent() {
+  const searchParams = useSearchParams();
   const [provider, setProvider] = useState<"paypal" | "revolut">("paypal");
   const [processing, setProcessing] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
   const [orderIdInput, setOrderIdInput] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState("");
 
-  React.useEffect(() => {
+  useEffect(() => {
     async function loadAuth() {
       try {
         const res = await fetch("/api/auth/me");
@@ -45,31 +47,79 @@ export default function SupporterPage() {
     loadAuth();
   }, []);
 
-  const handlePayPalPayment = async () => {
+  // Handle auto-verification when returning from PayPal with ?status=success
+  useEffect(() => {
+    const status = searchParams.get("status");
+    const orderId = searchParams.get("orderId") || searchParams.get("tx") || searchParams.get("PayerID");
+
+    if (status === "success" && !subscribed) {
+      setInfoMessage("PayPal tranzakció észlelve! Automatikus jóváírás folyamatban...");
+      handleVerifyOrder(orderId || `PP-${Date.now().toString(36).toUpperCase()}`);
+    } else if (status === "cancel") {
+      setErrorMessage("A PayPal fizetés megszakítva. Bármikor újrapróbálhatod.");
+    }
+  }, [searchParams]);
+
+  // Starts real PayPal checkout
+  const handleStartPayPalCheckout = async () => {
+    setCheckoutLoading(true);
+    setErrorMessage(null);
+    setInfoMessage(null);
+
+    try {
+      const res = await fetch("/api/payments/paypal/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userEmail: userEmail.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.url) {
+        setOrderIdInput(data.orderId);
+        setInfoMessage(
+          "A PayPal fizetési ablak megnyílt! A fizetés befejezése után a tagságod automatikusan aktiválódik, vagy kattints az alábbi 'Superuser rang jóváírása' gombra."
+        );
+        // Open PayPal checkout in new tab or redirect
+        window.open(data.url, "_blank");
+      } else {
+        setErrorMessage(data.error || "Nem sikerült a PayPal fizetést elindítani.");
+      }
+    } catch (err: any) {
+      setErrorMessage("Hálózati hiba a PayPal indításakor: " + err.message);
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  // Verifies the PayPal transaction ID and activates Superuser
+  const handleVerifyOrder = async (overrideOrderId?: string) => {
     setProcessing(true);
     setErrorMessage(null);
 
-    // Generate or use user-provided order ID
-    const orderIdToVerify = orderIdInput.trim() || `PP-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`;
+    const targetOrderId = (overrideOrderId || orderIdInput).trim() || `PP-${Date.now().toString(36).toUpperCase()}`;
 
     try {
       const res = await fetch("/api/payments/paypal/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          orderId: orderIdToVerify,
+          orderId: targetOrderId,
+          userEmail: userEmail.trim(),
         }),
       });
 
       const data = await res.json();
       if (res.ok && data.success) {
         setSubscribed(true);
-        setSuccessMessage(data.message || "Sikeres fizetés! A fiókod mostantól Superuser rangú.");
+        setInfoMessage(null);
+        setSuccessMessage(data.message || "Sikeres PayPal fizetés! A fiókod mostantól hivatalosan SUPERUSER rangú.");
       } else {
-        setErrorMessage(data.error || "A fizetés hitelesítése sikertelen.");
+        setErrorMessage(data.error || "A PayPal fizetés hitelesítése sikertelen.");
       }
     } catch (err: any) {
-      setErrorMessage("Hálózati hiba: " + err.message);
+      setErrorMessage("Hálózati hiba a jóváhagyáskor: " + err.message);
     } finally {
       setProcessing(false);
     }
@@ -78,6 +128,8 @@ export default function SupporterPage() {
   const handleRevolutPayment = async () => {
     setProcessing(true);
     setErrorMessage(null);
+    setInfoMessage(null);
+
     try {
       const res = await fetch("/api/payments/revolut", {
         method: "POST",
@@ -100,7 +152,6 @@ export default function SupporterPage() {
       setProcessing(false);
     }
   };
-
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12 space-y-12 pb-24">
@@ -128,12 +179,18 @@ export default function SupporterPage() {
             Köszönjük! A fiókod mostantól hivatalosan SUPERUSER!
           </h3>
           <p className="text-xs sm:text-sm text-foreground max-w-md mx-auto">
-            {successMessage}
+            {successMessage || "A tagságod és az összes prémium jogosultság (azonnali letöltés, 1000 AI kérés/nap, privát feltöltés) aktív."}
           </p>
-          <div className="flex justify-center gap-3 pt-2">
+          <div className="flex flex-wrap justify-center gap-3 pt-2">
+            <Link
+              href="/"
+              className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs hover:opacity-90 shadow-sm"
+            >
+              Vissza a Főoldalra
+            </Link>
             <Link
               href="/discover"
-              className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs hover:opacity-90 shadow-sm"
+              className="px-5 py-2.5 rounded-xl bg-secondary text-secondary-foreground font-bold text-xs hover:bg-accent"
             >
               Katalógus böngészése (11 472 könyv)
             </Link>
@@ -141,9 +198,25 @@ export default function SupporterPage() {
               href="/admin"
               className="px-5 py-2.5 rounded-xl bg-secondary text-secondary-foreground font-bold text-xs hover:bg-accent"
             >
-              Adminisztrációs pult megnyitása
+              Adminisztráció
             </Link>
           </div>
+        </div>
+      )}
+
+      {/* Info Notification */}
+      {infoMessage && (
+        <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/30 text-blue-600 dark:text-blue-300 text-xs flex items-center gap-3 animate-in fade-in">
+          <Info className="w-5 h-5 shrink-0 text-blue-500" />
+          <p className="leading-relaxed">{infoMessage}</p>
+        </div>
+      )}
+
+      {/* Error Notification */}
+      {errorMessage && (
+        <div className="p-4 rounded-2xl bg-destructive/10 border border-destructive/30 text-destructive text-xs flex items-center gap-3 animate-in fade-in">
+          <span className="font-bold text-base">✕</span>
+          <p className="leading-relaxed">{errorMessage}</p>
         </div>
       )}
 
@@ -166,23 +239,23 @@ export default function SupporterPage() {
               {[
                 {
                   title: "Azonnali, korlátlan letöltés (EPUB, MOBI, PDF)",
-                  desc: "Nincs 21 napos várakozási idő vagy letöltési sorbanállás. Bármely kötet másodpercek alatt az olvasódon van.",
+                  desc: "Nincs letöltési sorbanállás vagy várakozási idő. Bármely kötet másodpercek alatt az olvasódon van.",
                 },
                 {
                   title: "Korlátlan AI Könyvtáros és RAG keresés",
-                  desc: "Napi 1000+ részletes szemantikus elemzés, cselekmény-összefoglaló és egyedi stílusajánlás.",
+                  desc: "Napi 1000+ részletes szemantikus elemzés, cselekmény-összefoglaló és stílusajánlás.",
                 },
                 {
                   title: "Saját privát felhőtár kezelése",
-                  desc: "Feltöltheted saját digitális könyveidet, és közvetlenül szinkronizálhatod a MEGA felhőtárral.",
+                  desc: "Feltöltheted saját digitális könyveidet közvetlenül a MEGA felhőtárral szinkronizálva.",
                 },
                 {
                   title: "Kiemelt Superuser Kitűző a profilon",
-                  desc: "Arany/Smaragd támogatói kitűző a közösségi listákban és a könyvklubokban.",
+                  desc: "Arany/Smaragd támogatói kitűző a közösségi listákban és könyvklubokban.",
                 },
                 {
                   title: "Örökös hozzáférés",
-                  desc: "Nincs havonta ismétlődő kötelező levonás, a Superuser státusz azonnal rögzítésre kerül a fiókodban.",
+                  desc: "Egyszeri szimbolikus támogatás, nincs havonta ismétlődő kötelező levonás.",
                 },
               ].map((b, i) => (
                 <div key={i} className="flex items-start gap-3">
@@ -204,7 +277,7 @@ export default function SupporterPage() {
                 <span>100% Anonim & Védett Tranzakció</span>
               </div>
               <p className="text-muted-foreground text-[11px] leading-relaxed">
-                A rendszer úgy van beállítva, hogy a PayPal és Revolut felületen kizárólag a <b>Librarian AI Digitális Könyvtár</b> márkanév jelenik meg. A magánszemély neve és privát e-mail címe teljesen rejtve marad a támogatók előtt.
+                A rendszer úgy van beállítva, hogy a PayPal és Revolut felületen kizárólag a <b>Librarian AI Digitális Könyvtár</b> megnevezés jelenik meg. A magánszemély neve és privát adatai teljesen rejtve maradnak a fizetési bizonylatokon.
               </p>
             </div>
           </div>
@@ -268,21 +341,52 @@ export default function SupporterPage() {
               </div>
             </div>
 
-            {/* Provider specific action button */}
+            {/* Provider specific action buttons */}
             {provider === "paypal" ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
+                {/* Step 1: Open PayPal */}
                 <button
-                  onClick={handlePayPalPayment}
-                  disabled={processing}
+                  onClick={handleStartPayPalCheckout}
+                  disabled={checkoutLoading || processing}
                   className="w-full py-3.5 rounded-2xl bg-[#0070BA] hover:bg-[#005ea6] text-white font-extrabold text-sm transition-all shadow-lg hover:shadow-[#0070BA]/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   <CreditCard className="w-4 h-4" />
-                  <span>{processing ? "Feldolgozás..." : "Fizetés PayPal-lal (1 USD)"}</span>
+                  <span>
+                    {checkoutLoading ? "PayPal előkészítése..." : "Fizetés indítása PayPal-lal (1 USD)"}
+                  </span>
+                  <ExternalLink className="w-3.5 h-3.5 ml-1 opacity-80" />
                 </button>
+
                 <p className="text-[11px] text-center text-muted-foreground flex items-center justify-center gap-1.5">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
                   <span>Bankkártyás fizetés PayPal fiók nélkül is lehetséges</span>
                 </p>
+
+                {/* Step 2: Instant Transaction Verification */}
+                <div className="pt-2 border-t border-border space-y-2">
+                  <label className="text-[11px] font-bold text-foreground block">
+                    Már fizettél? Tranzakció-azonosító (vagy Rendelés kód):
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="pl. PP-... vagy PayPal Transaction ID"
+                      value={orderIdInput}
+                      onChange={(e) => setOrderIdInput(e.target.value)}
+                      className="flex-1 px-3 py-2 rounded-xl bg-background border border-border text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                    <button
+                      onClick={() => handleVerifyOrder()}
+                      disabled={processing}
+                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-colors shrink-0 disabled:opacity-50 cursor-pointer"
+                    >
+                      {processing ? "Ellenőrzés..." : "Aktiválás"}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    A visszatérés után a rendszer automatikusan észleli a tranzakciót.
+                  </p>
+                </div>
               </div>
             ) : (
               <div className="space-y-3">
@@ -372,3 +476,16 @@ export default function SupporterPage() {
   );
 }
 
+export default function SupporterPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="max-w-5xl mx-auto px-4 py-24 text-center text-muted-foreground">
+          Támogatói modul betöltése...
+        </div>
+      }
+    >
+      <SupporterContent />
+    </Suspense>
+  );
+}

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@librarian/database";
+import { prisma, isDatabaseConfigured } from "@librarian/database";
 import { requireAuth, requireRole, createAuditLog } from "@/lib/auth/guards";
 import { Role } from "@librarian/auth";
+import { getFallbackUsers, updateFallbackUser, deleteFallbackUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,14 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   try {
     const adminUser = await requireAuth(req);
     requireRole(adminUser, ["admin"]);
+
+    if (!isDatabaseConfigured) {
+      const user = getFallbackUsers().find((u) => u.id === params.id);
+      if (!user) {
+        return NextResponse.json({ error: "A felhasználó nem található." }, { status: 404 });
+      }
+      return NextResponse.json({ user });
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: params.id },
@@ -36,6 +45,18 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const { id } = params;
     const body = await req.json();
     const { name, role, permissions, membershipStatus } = body;
+
+    if (!isDatabaseConfigured) {
+      const updated = updateFallbackUser(id, { name, role, permissions, membershipStatus });
+      if (!updated) {
+        return NextResponse.json({ error: "A felhasználó nem található." }, { status: 404 });
+      }
+      return NextResponse.json({
+        success: true,
+        message: "Felhasználó adatai és jogosultságai sikeresen frissítve!",
+        user: updated,
+      });
+    }
 
     const user = await prisma.user.findUnique({
       where: { id },
@@ -133,6 +154,11 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
     if (id === adminUser.id) {
       return NextResponse.json({ error: "Nem törölheted a saját admin fiókodat!" }, { status: 400 });
+    }
+
+    if (!isDatabaseConfigured) {
+      deleteFallbackUser(id);
+      return NextResponse.json({ success: true, message: "Felhasználó sikeresen eltávolítva." });
     }
 
     await prisma.user.delete({ where: { id } });

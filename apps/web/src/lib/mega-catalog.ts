@@ -11,6 +11,11 @@ export interface MegaBookRecord {
   slug: string;
   coverId?: string | null;
   coverUrl?: string | null;
+  description?: string | null;
+  publishedYear?: number | null;
+  genre?: string | null;
+  isNewlyUploaded?: boolean;
+  libraryReleaseAt?: string | null;
   formats: Array<{
     name: string;
     format: string;
@@ -245,9 +250,34 @@ function getBookPriorityScore(x: MegaBookRecord): number {
   return score;
 }
 
+declare global {
+  // eslint-disable-next-line no-var
+  var uploadedMegaBooksGlobal: MegaBookRecord[] | undefined;
+  // eslint-disable-next-line no-var
+  var uploadedFileBuffersGlobal: Map<string, { buffer: Buffer; mimeType: string; filename: string }> | undefined;
+}
+
+const uploadedMegaBooks: MegaBookRecord[] = globalThis.uploadedMegaBooksGlobal ?? [];
+globalThis.uploadedMegaBooksGlobal = uploadedMegaBooks;
+
+const uploadedFileBuffers: Map<string, { buffer: Buffer; mimeType: string; filename: string }> =
+  globalThis.uploadedFileBuffersGlobal ?? new Map();
+globalThis.uploadedFileBuffersGlobal = uploadedFileBuffers;
+
+export function storeUploadedFileBuffer(fileId: string, buffer: Buffer, mimeType: string, filename: string): void {
+  uploadedFileBuffers.set(fileId, { buffer, mimeType, filename });
+}
+
+export function getUploadedFileBuffer(fileId: string) {
+  return uploadedFileBuffers.get(fileId);
+}
+
 // Pre-process, sort by priority (renowned authors + real covers first)
 const rawList: MegaBookRecord[] = (rawMegaBooks as unknown as MegaBookRecord[]) || [];
-const allBooks: MegaBookRecord[] = [...rawList].sort((a, b) => getBookPriorityScore(b) - getBookPriorityScore(a));
+const allBooks: MegaBookRecord[] = [
+  ...uploadedMegaBooks,
+  ...[...rawList].sort((a, b) => getBookPriorityScore(b) - getBookPriorityScore(a)),
+];
 
 // Fast map by ID, by slug, and by format file ID
 const bookById = new Map<string, MegaBookRecord>();
@@ -264,6 +294,32 @@ for (const b of allBooks) {
   for (const f of b.formats) {
     formatById.set(f.id, { ...f, book: b });
   }
+}
+
+export function addUploadedMegaBook(book: MegaBookRecord): MegaBookRecord {
+  if (!book.calibreId) {
+    book.calibreId = Date.now();
+  }
+  book.isNewlyUploaded = true;
+  if (!book.libraryReleaseAt) {
+    book.libraryReleaseAt = new Date().toISOString();
+  }
+  if (!Array.isArray(book.formats)) {
+    book.formats = [];
+  }
+
+  uploadedMegaBooks.unshift(book);
+  allBooks.unshift(book);
+  bookById.set(book.id, book);
+  if (book.calibreId) {
+    bookById.set(book.calibreId.toString(), book);
+    bookById.set(`mega_${book.calibreId}`, book);
+  }
+  bookBySlug.set(book.slug, book);
+  for (const f of book.formats) {
+    formatById.set(f.id, { ...f, book });
+  }
+  return book;
 }
 
 export function findFormatById(fileId: string) {
@@ -532,7 +588,7 @@ export function getMegaBookDetail(idOrSlug: string) {
     id: b.id,
     title: b.title,
     slug: b.slug,
-    description: `A(z) „${b.title}” című kötet a magyar Calibre felhőarchívumból, ${b.author} klasszikus alkotása. Elérhető közvetlen olvasásra és letöltésre: ${b.formats.map((f) => f.format).join(", ")} formátumokban.`,
+    description: b.description || `A(z) „${b.title}” című kötet a magyar Calibre felhőarchívumból, ${b.author} klasszikus alkotása. Elérhető közvetlen olvasásra és letöltésre: ${b.formats.map((f) => f.format).join(", ")} formátumokban.`,
     aiSummary: `AI Elemzés: ${b.author} jellegzetes stílusjegyeit hordozó mű, amely a(z) ${cats.join(", ")} műfaj kedvelőinek kihagyhatatlan olvasmány. Részletesen katalogizálva a felhőtárhelyről.`,
     averageRating: parseFloat(rating.toFixed(1)),
     ratingsCount,
@@ -548,15 +604,16 @@ export function getMegaBookDetail(idOrSlug: string) {
     edition: {
       id: `ed_${b.id}`,
       publisher: "Calibre Digitális Archívum",
-      publishedYear: 2018,
+      publishedYear: b.publishedYear || 2024,
       isbn10: null,
       isbn13: null,
       pages,
       distributionStatus: "PUBLIC_DOMAIN",
-      libraryReleaseAt: new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString(),
+      libraryReleaseAt: b.libraryReleaseAt || new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString(),
       rightsSource: "MEGA Calibre Felhőtárhely",
       rightsLicense: "Közkincs / Nyilvános Olvasmány",
     },
+    isNewlyUploaded: b.isNewlyUploaded ?? false,
     coverUrl: b.coverUrl || (b.coverId ? `/api/cover/${b.coverId}` : null),
     files,
     reviews: [

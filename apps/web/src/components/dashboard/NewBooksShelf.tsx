@@ -13,6 +13,7 @@ export interface NewBookItem {
   coverUrl?: string;
   publishedYear?: number | string;
   releaseDate?: string;
+  isNewlyUploaded?: boolean;
 }
 
 export const NewBooksShelf: React.FC = () => {
@@ -41,6 +42,7 @@ export const NewBooksShelf: React.FC = () => {
               coverUrl: b.coverUrl || b.cover || `/api/cover/${b.id}`,
               publishedYear: b.publishedYear,
               releaseDate,
+              isNewlyUploaded: Boolean(b.isNewlyUploaded),
             };
           });
           setBooks(list);
@@ -158,6 +160,13 @@ export const NewBooksShelf: React.FC = () => {
                     {book.genre && (
                       <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md text-[10px] font-bold bg-background/90 backdrop-blur-md text-foreground border border-border/50 shadow-sm">
                         {book.genre}
+                      </span>
+                    )}
+
+                    {/* Newly uploaded badge */}
+                    {book.isNewlyUploaded && (
+                      <span className="absolute top-2 right-2 px-2 py-0.5 rounded-md text-[9px] font-extrabold bg-emerald-500 text-white shadow-md animate-pulse">
+                        ÚJ FELTÖLTÉS
                       </span>
                     )}
                   </div>

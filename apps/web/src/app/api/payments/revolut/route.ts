@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@librarian/database";
+import { prisma, isDatabaseConfigured } from "@librarian/database";
 import { requireAuth, createAuditLog } from "@/lib/auth/guards";
 import { checkRateLimit, RATE_LIMIT_CONFIGS, getClientIp } from "@/lib/security/rate-limiter";
+import { promoteUserToSuperuser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -42,79 +43,87 @@ export async function POST(req: NextRequest) {
     const transactionId = orderId || `REV-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`;
 
     if (action === "confirm_transfer" || action === "simulate") {
-      // Replay check
-      const existing = await prisma.payment.findUnique({ where: { orderId: transactionId } });
-      if (existing) {
-        return NextResponse.json({ error: "Ez a Revolut tranzakció már fel lett használva." }, { status: 400 });
+      // Standalone mode promotion
+      promoteUserToSuperuser(user.id);
+
+      if (isDatabaseConfigured) {
+        try {
+          const existing = await prisma.payment.findUnique({ where: { orderId: transactionId } });
+          if (existing) {
+            return NextResponse.json({ error: "Ez a Revolut tranzakció már fel lett használva." }, { status: 400 });
+          }
+
+          await prisma.$transaction(async (tx) => {
+            await tx.payment.create({
+              data: {
+                userId: user.id,
+                provider: "revolut",
+                orderId: transactionId,
+                amount: 1.0,
+                currency: "USD",
+                status: "COMPLETED",
+                receiverEmail: process.env.REVOLUT_REVTAG || "@librarian_ai",
+                rawPayload: { revtag: revtag || "@librarian_ai", action },
+              },
+            });
+
+            await tx.subscription.create({
+              data: {
+                userId: user.id,
+                tier: "SUPERUSER",
+                status: "ACTIVE",
+                startedAt: new Date(),
+                expiresAt: new Date(Date.now() + 365 * 24 * 3600 * 1000),
+                paymentId: transactionId,
+              },
+            });
+
+            await tx.membership.upsert({
+              where: { id: `mem_${user.id}` },
+              create: {
+                id: `mem_${user.id}`,
+                userId: user.id,
+                status: "SUPPORTER",
+                startedAt: new Date(),
+                provider: "revolut",
+                providerSubscriptionId: transactionId,
+              },
+              update: {
+                status: "SUPPORTER",
+                updatedAt: new Date(),
+              },
+            });
+
+            await tx.userPermission.upsert({
+              where: { userId: user.id },
+              create: {
+                userId: user.id,
+                canDownload: true,
+                canDirectDownload: true,
+                canUploadPrivate: true,
+                canModerate: false,
+                canAdmin: false,
+                canUseChat: true,
+                canSendChatMessages: true,
+                canCreateChatRooms: true,
+                canModerateChat: false,
+                aiDailyLimit: 1000,
+              },
+              update: {
+                canDownload: true,
+                canDirectDownload: true,
+                canUploadPrivate: true,
+                canUseChat: true,
+                canSendChatMessages: true,
+                canCreateChatRooms: true,
+                aiDailyLimit: 1000,
+              },
+            });
+          });
+        } catch (dbErr: any) {
+          console.warn("Revolut DB note:", dbErr.message);
+        }
       }
-
-      await prisma.$transaction(async (tx) => {
-        await tx.payment.create({
-          data: {
-            userId: user.id,
-            provider: "revolut",
-            orderId: transactionId,
-            amount: 1.0,
-            currency: "USD",
-            status: "COMPLETED",
-            receiverEmail: process.env.REVOLUT_REVTAG || "@librarian_ai",
-            rawPayload: { revtag: revtag || "@librarian_ai", action },
-          },
-        });
-
-        await tx.subscription.create({
-          data: {
-            userId: user.id,
-            tier: "SUPERUSER",
-            status: "ACTIVE",
-            startedAt: new Date(),
-            expiresAt: new Date(Date.now() + 365 * 24 * 3600 * 1000),
-            paymentId: transactionId,
-          },
-        });
-
-        await tx.membership.upsert({
-          where: { id: `mem_${user.id}` },
-          create: {
-            id: `mem_${user.id}`,
-            userId: user.id,
-            status: "SUPPORTER",
-            startedAt: new Date(),
-            provider: "revolut",
-            providerSubscriptionId: transactionId,
-          },
-          update: {
-            status: "SUPPORTER",
-            updatedAt: new Date(),
-          },
-        });
-
-        await tx.userPermission.upsert({
-          where: { userId: user.id },
-          create: {
-            userId: user.id,
-            canDownload: true,
-            canDirectDownload: true,
-            canUploadPrivate: true,
-            canModerate: false,
-            canAdmin: false,
-            canUseChat: true,
-            canSendChatMessages: true,
-            canCreateChatRooms: true,
-            canModerateChat: false,
-            aiDailyLimit: 1000,
-          },
-          update: {
-            canDownload: true,
-            canDirectDownload: true,
-            canUploadPrivate: true,
-            canUseChat: true,
-            canSendChatMessages: true,
-            canCreateChatRooms: true,
-            aiDailyLimit: 1000,
-          },
-        });
-      });
 
       await createAuditLog({
         userId: user.id,

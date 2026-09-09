@@ -4,7 +4,7 @@ import { prisma, isDatabaseConfigured } from "@librarian/database";
 import { canUserDownload, UserContext } from "@librarian/auth";
 import { defaultStorageManager } from "@librarian/storage";
 import { FALLBACK_BOOKS } from "@/lib/fallback-books";
-import { findFormatById, getMimeType } from "@/lib/mega-catalog";
+import { findFormatById, getMimeType, getUploadedFileBuffer } from "@/lib/mega-catalog";
 import { requireAuth, requirePermission, createAuditLog } from "@/lib/auth/guards";
 import { checkRateLimit, RATE_LIMIT_CONFIGS, getClientIp } from "@/lib/security/rate-limiter";
 
@@ -274,6 +274,19 @@ export async function GET(req: NextRequest, { params }: { params: { fileId: stri
       membershipStatus: user.membershipStatus,
       permissions: user.permissions,
     };
+
+    // 0. Check if downloading a newly uploaded book binary
+    const uploadedFile = getUploadedFileBuffer(fileId);
+    if (uploadedFile) {
+      return new NextResponse(new Uint8Array(uploadedFile.buffer), {
+        headers: {
+          "Content-Disposition": makeContentDisposition(uploadedFile.filename),
+          "Content-Type": uploadedFile.mimeType,
+          "Content-Length": uploadedFile.buffer.length.toString(),
+          "Cache-Control": "private, no-cache, no-store, must-revalidate",
+        },
+      });
+    }
 
     // 1. Check if downloading a fallback sample book
     if (fileId.startsWith("file_fb_")) {

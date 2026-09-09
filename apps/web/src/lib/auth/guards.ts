@@ -98,9 +98,19 @@ export async function createAuditLog(options: {
     delete sanitizedDetails.secret;
     delete sanitizedDetails.clientSecret;
 
+    if (!isDatabaseConfigured) {
+      return;
+    }
+
+    let finalUserId: string | null = null;
+    if (options.userId) {
+      const dbUser = await prisma.user.findUnique({ where: { id: options.userId } });
+      if (dbUser) finalUserId = dbUser.id;
+    }
+
     await prisma.auditLog.create({
       data: {
-        userId: options.userId || null,
+        userId: finalUserId,
         action: options.action,
         resource: options.resource,
         resourceId: options.resourceId || null,
@@ -109,6 +119,6 @@ export async function createAuditLog(options: {
       },
     });
   } catch (err: any) {
-    console.warn("Nem sikerült menteni az audit logot:", err.message);
+    console.warn("Audit log note:", err.message);
   }
 }

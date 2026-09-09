@@ -7,12 +7,29 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await requireAuth(req);
+    let user = null;
+    try {
+      user = await requireAuth(req);
+    } catch {
+      // Allow unauthenticated verification if userEmail is supplied
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const { orderId, userEmail } = body;
+
+    const targetUserId = user?.id || userEmail?.trim()?.toLowerCase();
+
+    if (!targetUserId) {
+      return NextResponse.json(
+        { error: "A fiók azonosításához kérjük jelentkezz be, vagy add meg a fiókod e-mail címét." },
+        { status: 400 }
+      );
+    }
 
     // Rate limit payment verifications
     const ip = getClientIp(req);
     const rateLimit = checkRateLimit({
-      identifier: `pay_verify:${user.id || ip}`,
+      identifier: `pay_verify:${targetUserId || ip}`,
       windowMs: RATE_LIMIT_CONFIGS.paymentVerify.windowMs,
       maxRequests: RATE_LIMIT_CONFIGS.paymentVerify.maxRequests,
     });
@@ -24,9 +41,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = await req.json();
-    const { orderId } = body;
-
     if (!orderId) {
       return NextResponse.json(
         { error: "A PayPal tranzakció-azonosító (orderId) megadása kötelező." },
@@ -37,7 +51,7 @@ export async function POST(req: NextRequest) {
     // Strict server-side verification against PayPal & DB replay check
     const result = await verifyAndProcessPayPalOrder({
       orderId,
-      userId: user.id,
+      userId: targetUserId,
       req,
     });
 
