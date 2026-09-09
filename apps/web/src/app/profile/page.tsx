@@ -49,10 +49,8 @@ export default function ProfilePage() {
   const handleLogout = async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
-      window.location.href = "/login";
-    } catch {
-      window.location.href = "/login";
-    }
+    } catch {}
+    window.location.href = "/login?switch=true";
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
@@ -108,12 +106,24 @@ export default function ProfilePage() {
 
   if (!user) {
     return (
-      <div className="max-w-md mx-auto py-20 text-center space-y-4">
-        <User className="w-12 h-12 text-muted-foreground mx-auto" />
-        <h2 className="text-xl font-bold text-foreground">Nem sikerült betölteni a profilt</h2>
-        <Link href="/login" className="text-primary font-bold hover:underline">
-          Kérjük, jelentkezz be újra &rarr;
-        </Link>
+      <div className="max-w-lg mx-auto py-16 px-4 text-center space-y-6">
+        <div className="p-8 rounded-3xl bg-card border border-border shadow-md space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-primary/15 text-primary flex items-center justify-center mx-auto">
+            <User className="w-7 h-7" />
+          </div>
+          <h2 className="text-xl font-black text-foreground">Bejelentkezés szükséges</h2>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            A profilod, a kölcsönzéseid és az AI Könyvtáros napi kvótád megtekintéséhez kérjük, jelentkezz be a fiókodba!
+          </p>
+          <div className="pt-2">
+            <Link
+              href="/login?from=/profile&switch=true"
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold shadow-md hover:opacity-95 transition-opacity"
+            >
+              <span>Bejelentkezés most &rarr;</span>
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }

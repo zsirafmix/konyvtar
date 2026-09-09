@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { prisma, isDatabaseConfigured } from "@librarian/database";
 import { UserPermissions, ROLE_DEFAULT_PERMISSIONS, Role } from "@librarian/auth";
@@ -380,6 +380,42 @@ export async function ensureUserPermissions(userId: string, role: Role): Promise
   }
 }
 
+const SESSION_SIGN_SECRET = process.env.AUTH_SECRET || "librarian_secure_hmac_secret_2026_salt_99";
+
+export function signToken(userId: string, expiresAtMs: number): string {
+  const nonce = randomBytes(8).toString("hex");
+  const payload = `s_${userId}.${expiresAtMs}.${nonce}`;
+  const hmac = createHmac("sha256", SESSION_SIGN_SECRET).update(payload).digest("hex");
+  return `${payload}.${hmac}`;
+}
+
+export function verifySignedToken(token: string): { userId: string; expiresAt: Date } | null {
+  if (!token || !token.startsWith("s_")) return null;
+  const parts = token.split(".");
+  if (parts.length !== 4) return null;
+  const [sUserId, expiresAtMsStr, nonce, sig] = parts;
+  const userId = sUserId.replace(/^s_/, "");
+  const payload = `${sUserId}.${expiresAtMsStr}.${nonce}`;
+  const expectedSig = createHmac("sha256", SESSION_SIGN_SECRET).update(payload).digest("hex");
+
+  try {
+    const a = Buffer.from(sig, "hex");
+    const b = Buffer.from(expectedSig, "hex");
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+
+  const expiresAtMs = Number(expiresAtMsStr);
+  if (isNaN(expiresAtMs) || Date.now() > expiresAtMs) {
+    return null;
+  }
+
+  return { userId, expiresAt: new Date(expiresAtMs) };
+}
+
 /**
  * Creates a new cryptographically secure session for a user.
  */
@@ -388,8 +424,8 @@ export async function createSession(
   req?: Request,
   fallbackUser?: AuthenticatedUser
 ): Promise<{ token: string; expiresAt: Date }> {
-  const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000);
+  const token = signToken(userId, expiresAt.getTime());
 
   const ipAddress = req ? getClientIp(req) : null;
   const userAgent = req?.headers.get("user-agent") || null;
@@ -601,6 +637,52 @@ export async function validateSessionToken(token: string, impersonateUserId?: st
     };
   }
 
+  // If not in memory (e.g. server restarted on Render), verify cryptographic signature
+  const verified = verifySignedToken(token);
+  if (verified) {
+    const targetUser = getFallbackUsers().find(
+      (u) => u.id === verified.userId || u.email.toLowerCase() === verified.userId.toLowerCase()
+    );
+    if (targetUser) {
+      const restoredSession: FallbackSessionRecord = {
+        sessionId: `sess_${token.slice(0, 8)}`,
+        token,
+        user: targetUser,
+        expiresAt: verified.expiresAt,
+      };
+      fallbackSessions.set(token, restoredSession);
+
+      if (targetUser.role === "admin" && impersonateUserId && impersonateUserId !== targetUser.id) {
+        const impersonated = getFallbackUsers().find(
+          (u) => u.id === impersonateUserId || u.email.toLowerCase() === impersonateUserId.toLowerCase()
+        );
+        if (impersonated) {
+          return {
+            sessionId: restoredSession.sessionId,
+            token: restoredSession.token,
+            user: {
+              ...impersonated,
+              isImpersonating: true,
+              realAdmin: {
+                id: targetUser.id,
+                email: targetUser.email,
+                displayName: targetUser.displayName,
+              },
+            },
+            expiresAt: restoredSession.expiresAt,
+          };
+        }
+      }
+
+      return {
+        sessionId: restoredSession.sessionId,
+        token: restoredSession.token,
+        user: targetUser,
+        expiresAt: verified.expiresAt,
+      };
+    }
+  }
+
   return null;
 }
 
@@ -611,7 +693,7 @@ export async function destroySession(token: string): Promise<boolean> {
   fallbackSessions.delete(token);
   if (isDatabaseConfigured) {
     try {
-      await prisma.session.delete({ where: { token } });
+      await prisma.session.deleteMany({ where: { token } });
       return true;
     } catch {
       return false;

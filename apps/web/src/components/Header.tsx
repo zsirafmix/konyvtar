@@ -139,20 +139,19 @@ export const Header: React.FC = () => {
           </div>
         </Link>
 
-        {/* Quick Logout */}
+        {/* Visible Logout Button */}
         <button
           onClick={async () => {
             try {
               await fetch("/api/auth/logout", { method: "POST" });
-              window.location.href = "/login";
-            } catch {
-              window.location.href = "/login";
-            }
+            } catch {}
+            window.location.href = "/login?switch=true";
           }}
-          className="p-2 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
-          title="Kijelentkezés"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/30 text-xs font-bold transition-all cursor-pointer shrink-0 shadow-sm"
+          title="Kijelentkezés a fiókból"
         >
-          <LogOut className="w-4 h-4" />
+          <LogOut className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Kijelentkezés</span>
         </button>
       </div>
     </header>

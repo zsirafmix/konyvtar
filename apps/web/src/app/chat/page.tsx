@@ -12,6 +12,7 @@ import {
   Award,
   AlertCircle,
 } from "lucide-react";
+import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 
 export default function AiLibrarianChatPage() {
   const [question, setQuestion] = useState("");
@@ -29,17 +30,19 @@ export default function AiLibrarianChatPage() {
     {
       question: "Milyen sorrendben érdemes olvasni az Alapítvány könyveket?",
       answer:
-        "A Librarian AI Calibre katalógusa alapján Isaac Asimov Alapítvány-ciklusának javasolt belső kronológiai sorrendje:\n\n1. **Az Alapítvány előtt** (Előzmény regény)\n2. **Előjáték az Alapítványhoz** (Előzmény regény)\n3. **Alapítvány** (1951) – Az Enciklopédia Alapítvány felállítása a Terminus bolygón\n4. **Alapítvány és Birodalom** (1952) – Az Öszvér megjelenése\n5. **Második Alapítvány** (1953) – A pszichohistória rejtett védelmezői\n6. **Az Alapítvány pereme** (1982) – Golan Trevize expedíciója\n7. **Alapítvány és Föld** (1986) – Az emberiség bölcsőjének felkutatása\n\nMindegyik kötet elérhető a könyvtáradban letölthető EPUB és MOBI formátumban!",
+        "### 📚 Alapítvány-Birodalom-Robot ciklus – Ajánlott olvasási sorrend\n\n**Szerző:** Isaac Asimov\n\nA sorozat köteteit a következő logikai és kanonikus sorrendben érdemes olvasni a legteljesebb élményért:\n\n* 1. **Alapítvány** (1951) – A Hari Seldon által indított pszichohistória alapköve\n* 2. **Alapítvány és Birodalom** (1952) – Az Öszvér megjelenése és a Seldon-terv kisiklása\n* 3. **Második Alapítvány** (1953) – A szellemi vezetők és pszichikusok harca\n* 4. **Az Alapítvány pereme** (1982) – Golan Trevize expedíciója a Gaia rejtélyéhez\n* 5. **Alapítvány és Föld** (1986) – Az emberiség eredetének felkutatása\n\n> **Könyvtáros tanácsa:** Kezdőknek kifejezetten az eredeti klasszikus trilógiát javasolt először elolvasni, mert ez nyújtja a legkatartikusabb irodalmi élményt!\n\nMindegyik kötet megtalálható és azonnal olvasható a digitális könyvtáradban!",
       matchedBooks: [],
       confidence: 0.98,
     },
   ]);
 
   const sampleQuestions = [
-    "Van könyvem a római köztársaság bukásáról?",
-    "Milyen sci-fi könyveket ajánlasz, ha tetszett a Dűne?",
-    "Hogyan kezdjek hozzá a kvantummechanika tanulásához?",
-    "Melyik Asimov vagy Arthur C. Clarke könyv a legrövidebb?",
+    "Milyen sorrendben érdemes olvasni az Alapítvány könyveket?",
+    "Milyen sorrendben olvassam a Dűne regényeket?",
+    "Ajánlj Rejtő Jenő könyveket a könyvtárból!",
+    "Miről szól Stanisław Lem Solaris című műve?",
+    "Milyen sorrendben olvassam a Vaják (Witcher) sagát?",
+    "Kicsoda Arthur C. Clarke és mik a legfontosabb regényei?",
   ];
 
   const handleSubmit = async (q: string) => {
@@ -167,8 +170,8 @@ export default function AiLibrarianChatPage() {
                   </span>
                 </div>
 
-                <div className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
-                  {item.answer}
+                <div className="text-sm text-foreground/90 leading-relaxed">
+                  <MarkdownRenderer content={item.answer} />
                 </div>
 
                 {/* Grounded books citations */}

@@ -7,6 +7,7 @@ const PUBLIC_PATHS = [
   "/register",
   "/forgot-password",
   "/reset-password",
+  "/logout",
 ];
 
 // Public API endpoints that do NOT require authentication
@@ -36,6 +37,14 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Handle explicit /logout navigation: wipe cookies and send to /login
+  if (pathname === "/logout") {
+    const res = NextResponse.redirect(new URL("/login?switch=true", req.url));
+    res.cookies.set("librarian_session", "", { path: "/", maxAge: 0, expires: new Date(0) });
+    res.cookies.set("librarian_impersonate", "", { path: "/", maxAge: 0, expires: new Date(0) });
+    return res;
+  }
+
   // 2. Check for public auth pages
   const isPublicPage = PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(path + "/"));
   const isPublicApi = PUBLIC_API_PREFIXES.some((prefix) => pathname.startsWith(prefix));
@@ -44,8 +53,9 @@ export function middleware(req: NextRequest) {
   const sessionCookie = req.cookies.get("librarian_session")?.value;
   const isAuthenticated = Boolean(sessionCookie && sessionCookie.length >= 32);
 
-  // If user is already authenticated and visits /login or /register, redirect to dashboard /
-  if (isAuthenticated && isPublicPage) {
+  // If user is already authenticated and visits /login or /register, redirect to dashboard / unless explicit switch requested
+  const isSwitching = req.nextUrl.searchParams.has("switch") || req.nextUrl.searchParams.has("logout");
+  if (isAuthenticated && isPublicPage && !isSwitching) {
     const dashboardUrl = new URL("/", req.url);
     return NextResponse.redirect(dashboardUrl);
   }

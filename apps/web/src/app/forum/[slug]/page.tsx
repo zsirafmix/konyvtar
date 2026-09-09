@@ -71,7 +71,7 @@ export default function ForumTopicPage() {
     setError("");
 
     try {
-      const res = await fetch(`/api/forum/${slug}`, {
+      const res = await fetch(`/api/forum/${encodeURIComponent(slug)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: replyText }),
@@ -84,9 +84,10 @@ export default function ForumTopicPage() {
       }
 
       setReplyText("");
+      setError("");
       loadTopic();
     } catch (err: any) {
-      setError("Hálózati hiba.");
+      setError("Hálózati hiba történt a hozzászólás elküldésekor.");
     } finally {
       setSubmitting(false);
     }
@@ -372,12 +373,35 @@ export default function ForumTopicPage() {
           <Lock className="w-4 h-4 text-rose-400" />
           <span>Ez a téma le van zárva, nem lehet új hozzászólást fűzni hozzá.</span>
         </div>
+      ) : !currentUser ? (
+        <div className="p-6 rounded-2xl bg-secondary/50 border border-border flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
+          <div className="space-y-1">
+            <h4 className="text-sm font-bold text-foreground">Szeretnél hozzászólni ehhez a témához?</h4>
+            <p className="text-xs text-muted-foreground">
+              A fórumon való részvételhez és a beszélgetéshez kérjük, jelentkezz be a fiókodba!
+            </p>
+          </div>
+          <Link
+            href={`/login?from=${encodeURIComponent(`/forum/${slug}`)}&switch=true`}
+            className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs shrink-0 shadow-md hover:opacity-90 transition-opacity"
+          >
+            Bejelentkezés &rarr;
+          </Link>
+        </div>
       ) : (
         <form onSubmit={handleSendReply} className="space-y-3 pt-4 border-t border-border/70">
           <h3 className="text-sm font-bold text-foreground">Hozzászólás hozzáadása</h3>
           {error && (
-            <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs">
-              {error}
+            <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs flex items-center justify-between gap-2">
+              <span>{error}</span>
+              {error.includes("bejelentkez") && (
+                <Link
+                  href={`/login?from=${encodeURIComponent(`/forum/${slug}`)}&switch=true`}
+                  className="font-bold underline text-[11px] shrink-0"
+                >
+                  Belépés
+                </Link>
+              )}
             </div>
           )}
           <textarea

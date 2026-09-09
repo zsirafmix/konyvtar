@@ -20,6 +20,7 @@ import {
   ShieldAlert,
   Sparkles,
   Award,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -168,6 +169,20 @@ export const DesktopSidebar: React.FC<{ userRole?: string; isSupporter?: boolean
               </span>
             </Link>
           )}
+
+          {/* Quick Logout Button */}
+          <button
+            onClick={async () => {
+              try {
+                await fetch("/api/auth/logout", { method: "POST" });
+              } catch {}
+              window.location.href = "/login?switch=true";
+            }}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-semibold text-destructive/80 hover:text-destructive hover:bg-destructive/10 border border-transparent hover:border-destructive/20 transition-all cursor-pointer text-left"
+          >
+            <LogOut className="w-4 h-4 text-destructive" />
+            <span>Kijelentkezés</span>
+          </button>
         </div>
       </div>
     </aside>

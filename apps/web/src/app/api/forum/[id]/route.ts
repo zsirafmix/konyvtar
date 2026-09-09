@@ -26,13 +26,14 @@ const CreateReplySchema = z.object({
  */
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { id } = params;
+    const rawId = params.id;
+    const decodedId = decodeURIComponent(rawId);
 
     if (isDatabaseConfigured) {
       try {
         const topic = await prisma.forumTopic.findFirst({
           where: {
-            OR: [{ id }, { slug: id }],
+            OR: [{ id: rawId }, { slug: rawId }, { id: decodedId }, { slug: decodedId }],
           },
           include: {
             author: {
@@ -97,7 +98,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     // In-memory fallback
     const allTopics = getFallbackForumTopics();
-    const topic = allTopics.find((t) => t.id === id || t.slug === id);
+    const topic = allTopics.find(
+      (t) => t.id === rawId || t.slug === rawId || t.id === decodedId || t.slug === decodedId
+    );
 
     if (!topic) {
       return NextResponse.json({ error: "A fórum téma nem található." }, { status: 404 });
@@ -125,16 +128,33 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
  */
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const user = await requireAuth(req);
-    const { id } = params;
+    let user;
+    try {
+      user = await requireAuth(req);
+    } catch {
+      return NextResponse.json(
+        {
+          error: "A hozzászólás küldéséhez be kell jelentkezned a könyvtári fiókodba!",
+          requiresLogin: true,
+        },
+        { status: 401 }
+      );
+    }
+
+    const rawId = params.id;
+    const decodedId = decodeURIComponent(rawId);
 
     const allTopics = getFallbackForumTopics();
-    let topic = allTopics.find((t) => t.id === id || t.slug === id);
+    let topic = allTopics.find(
+      (t) => t.id === rawId || t.slug === rawId || t.id === decodedId || t.slug === decodedId
+    );
 
     if (isDatabaseConfigured) {
       try {
         const dbTopic = await prisma.forumTopic.findFirst({
-          where: { OR: [{ id }, { slug: id }] },
+          where: {
+            OR: [{ id: rawId }, { slug: rawId }, { id: decodedId }, { slug: decodedId }],
+          },
         });
         if (dbTopic) {
           topic = {
@@ -247,7 +267,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const user = await requireAuth(req);
-    const { id } = params;
+    const rawId = params.id;
+    const decodedId = decodeURIComponent(rawId);
     const { searchParams } = new URL(req.url);
     const postId = searchParams.get("postId");
 
@@ -277,7 +298,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
     // 2. Delete whole topic
     const topics = getFallbackForumTopics();
-    const tIdx = topics.findIndex((t) => t.id === id || t.slug === id);
+    const tIdx = topics.findIndex((t) => t.id === rawId || t.slug === rawId || t.id === decodedId || t.slug === decodedId);
     if (tIdx >= 0) {
       if (topics[tIdx].author.id !== user.id && !isStaff) {
         return NextResponse.json({ error: "Nincs jogosultságod törölni ezt a témát." }, { status: 403 });
@@ -287,7 +308,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
     if (isDatabaseConfigured) {
       try {
-        await prisma.forumTopic.delete({ where: { id } });
+        await prisma.forumTopic.delete({ where: { id: rawId } });
       } catch (dbErr) {
         console.warn("Prisma topic delete note:", dbErr);
       }
@@ -305,7 +326,8 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const user = await requireAuth(req);
-    const { id } = params;
+    const rawId = params.id;
+    const decodedId = decodeURIComponent(rawId);
     const body = await req.json();
     const { postId, content, isPinned, isLocked } = body;
 
@@ -345,7 +367,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       }
 
       const topics = getFallbackForumTopics();
-      const topic = topics.find((t) => t.id === id || t.slug === id);
+      const topic = topics.find((t) => t.id === rawId || t.slug === rawId || t.id === decodedId || t.slug === decodedId);
       if (topic) {
         if (isPinned !== undefined) topic.isPinned = Boolean(isPinned);
         if (isLocked !== undefined) topic.isLocked = Boolean(isLocked);
@@ -354,7 +376,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       if (isDatabaseConfigured) {
         try {
           await prisma.forumTopic.update({
-            where: { id },
+            where: { id: topic?.id || rawId },
             data: {
               isPinned: isPinned !== undefined ? Boolean(isPinned) : undefined,
               isLocked: isLocked !== undefined ? Boolean(isLocked) : undefined,

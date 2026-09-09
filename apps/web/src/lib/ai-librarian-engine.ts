@@ -286,6 +286,68 @@ const FAMOUS_SERIES_ORDERS: Record<
     ],
     advice: "A hobbit elolvasása után A Gyűrűk Ura trilógia a fő mű; A szilmarilokat csak a trilógia után érdemes kézbe venni annak enciklopédikus mélysége miatt.",
   },
+  rejto: {
+    name: "Rejtő Jenő (P. Howard) légiós és humoros regényei",
+    author: "Rejtő Jenő",
+    recommendedOrder: [
+      "1. A tizennégy karátos autó (Gorcsev Iván és a Nobel-díj legendás kezdete)",
+      "2. A három testőr Afrikában (Csülök, Senki Alfonz és Tuskó Hopkins)",
+      "3. Piszkos Fred, a kapitány (A Csendes-óceán réme és Fülig Jimmy)",
+      "4. Piszkos Fred közbelép (Fülig Jimmy őszinte sajnálatára)",
+      "5. Az elveszett cirkáló",
+      "6. Az előretolt helyőrség (Galamb és Troppauer Hümér)",
+      "7. A láthatatlan légió",
+      "8. Vesztegzár a Grand Hotelben (Felix van der Goude és a bubópestis-komédia)",
+    ],
+    advice: "Rejtő regényei önmagukban is zseniálisak és önállóan is olvashatók, de a Piszkos Fred és a három jómadár kalandjait a fenti sorrendben a legszórakoztatóbb élvezni.",
+  },
+  lem: {
+    name: "Stanisław Lem filozofikus sci-fi művei",
+    author: "Stanisław Lem",
+    recommendedOrder: [
+      "1. Solaris (1961) – Az élő, gondolkodó óceán és az emberi megismerés határai",
+      "2. Kiberiáda (Trurl és Klapanciusz konstruktőrök zseniális gépmeséi)",
+      "3. Csillagnapló (Ijon Tichy űrutazó abszurd és mélyenszántó kalandjai)",
+      "4. Az Úr hangja (A földönkívüli üzenet megfejtésének dilemmája)",
+      "5. Éden (Kényszerleszállás és a megérthetetlen civilizáció)",
+      "6. Visszatérés (A csillagokból megtért űrhajós és a betiltott agresszió világa)",
+    ],
+    advice: "Kezdésnek a Solaris adja a legmélyebb filozófiai élményt, míg a humorosabb, szatírikus oldalért a Kiberiáda a legjobb belépő Lem világába.",
+  },
+  clarke: {
+    name: "Arthur C. Clarke Űrodisszeia ciklusa",
+    author: "Arthur C. Clarke",
+    recommendedOrder: [
+      "1. 2001. Űrodisszeia (A titokzatos fekete monolit és a HAL 9000)",
+      "2. 2010. Második űrodisszeia (A Jupiter csillaggá válása és az Europa védelme)",
+      "3. 2061. Harmadik űrodisszeia (A Halley-üstökös expedíciója)",
+      "4. 3001. Végső űrodisszeia (Frank Poole feltámadása és a monolitok végzete)",
+      "Önálló remekmű: Randevú a Rámával (Az idegen csillaghajó felfedezése)",
+    ],
+    advice: "A négy Űrodisszeia kötet szorosan összefügg, pontosan ebben a megjelenési és belső időrendben érdemes olvasni.",
+  },
+  adams: {
+    name: "Galaxis útikalauz stopposoknak (öt részes trilógia)",
+    author: "Douglas Adams",
+    recommendedOrder: [
+      "1. Galaxis útikalauz stopposoknak (Arthur Dent, Ford Prefect és a 42-es válasz)",
+      "2. Vendéglő a világ végén (Milliways és az univerzum pusztulásának látványa)",
+      "3. Az élet, a világmindenség, meg minden",
+      "4. Viszlát, és kösz a halakat!",
+      "5. Jobbára ártalmatlan",
+    ],
+    advice: "Szigorúan az 1. kötettel kezdj, és ne felejtsd otthon a törülköződet!",
+  },
+  orwell: {
+    name: "George Orwell politikai és társadalmi disztópiái",
+    author: "George Orwell",
+    recommendedOrder: [
+      "1. Állatfarm (1945) – Zseniális szatíra a hatalom megrontó természetéről",
+      "2. 1984 (1949) – Winston Smith tragédiája, a Gondolatrendőrség és a Nagy Testvér",
+      "3. Hódolat Katalóniának (Önéletrajzi beszámoló a spanyol polgárháborúról)",
+    ],
+    advice: "Az Állatfarm tökéletes és gyors bevezetés Orwell szimbolikájába, amelyet a felkavaró mélységű 1984 tesz teljessé.",
+  },
 };
 
 /**
@@ -308,10 +370,15 @@ export function synthesizeHungarianLibrarianAnswer(
       norm.includes(key) ||
       norm.includes(series.author.toLowerCase()) ||
       (key === "alapitvany" && (norm.includes("asimov") || norm.includes("foundation"))) ||
-      (key === "dune" && (norm.includes("herbert") || norm.includes("dűne") || norm.includes("arrakis"))) ||
+      (key === "dune" && (norm.includes("herbert") || norm.includes("dune") || norm.includes("arrakis"))) ||
       (key === "vajak" && (norm.includes("witcher") || norm.includes("geralt") || norm.includes("sapkowski"))) ||
       (key === "harrypotter" && (norm.includes("potter") || norm.includes("rowling"))) ||
-      (key === "gyurukura" && (norm.includes("tolkien") || norm.includes("gyűrűk") || norm.includes("frodo")))
+      (key === "gyurukura" && (norm.includes("tolkien") || norm.includes("gyuruk") || norm.includes("frodo"))) ||
+      (key === "rejto" && (norm.includes("rejto") || norm.includes("piszkos fred") || norm.includes("gorcsev") || norm.includes("legio"))) ||
+      (key === "lem" && (norm.includes("lem") || norm.includes("solaris") || norm.includes("kiberiada"))) ||
+      (key === "clarke" && (norm.includes("clarke") || norm.includes("urodisszeia") || norm.includes("2001"))) ||
+      (key === "adams" && (norm.includes("adams") || norm.includes("galaxis") || norm.includes("utikalauz") || norm.includes("stoppos"))) ||
+      (key === "orwell" && (norm.includes("orwell") || norm.includes("1984") || norm.includes("allatfarm")))
     ) {
       if (
         norm.includes("sorrend") ||

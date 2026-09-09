@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Compass, Library, Search, Sparkles, User } from "lucide-react";
+import { Home, Compass, Library, Search, Sparkles, User, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export const MobileNavbar: React.FC = () => {
@@ -11,10 +11,11 @@ export const MobileNavbar: React.FC = () => {
 
   const items = [
     { label: "Kezdőlap", href: "/", icon: Home },
-    { label: "Felfedezés", href: "/discover", icon: Compass },
-    { label: "AI Kérdés", href: "/ask-library", icon: Sparkles },
+    { label: "AI Könyvtáros", href: "/chat", icon: Sparkles },
     { label: "Könyvtáram", href: "/library", icon: Library },
+    { label: "Felfedezés", href: "/discover", icon: Compass },
     { label: "Profil", href: "/profile", icon: User },
+    { label: "Kilépés", href: "/logout", icon: LogOut },
   ];
 
   return (
