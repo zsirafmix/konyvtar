@@ -1,54 +1,60 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@librarian/database";
+import { prisma, isDatabaseConfigured } from "@librarian/database";
 import { requireAuth, requirePermission } from "@/lib/auth/guards";
 import { sanitizeUserContent } from "@/lib/security/sanitize";
+import { getFallbackChatRooms, FallbackChatRoom } from "@/lib/chat-store";
 
 export const dynamic = "force-dynamic";
 
-const DEFAULT_ROOMS = [
-  { name: "Általános", slug: "altalanos", description: "Általános olvasói társalgó és kötetlen beszélgetés", isDefault: true },
-  { name: "Könyvajánlók", slug: "konyvek", description: "Ajánlj könyveket és kérj tippeket másoktól", isDefault: false },
-  { name: "Sci-Fi & Fantasztikum", slug: "scifi", description: "Űrutazás, cyberpunk, fantasy világok és mágia", isDefault: false },
-  { name: "Technika & AI", slug: "technika", description: "Digitális könyvtári fejlesztések, technológia és mesterséges intelligencia", isDefault: false },
-];
-
 /**
- * GET /api/chat/rooms: List all chat rooms, auto-seeding defaults if empty
+ * GET /api/chat/rooms: List all chat rooms
  */
 export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth(req);
     requirePermission(user, "canUseChat");
 
-    let rooms = await prisma.chatRoom.findMany({
-      orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
-    });
+    if (isDatabaseConfigured) {
+      try {
+        let rooms = await prisma.chatRoom.findMany({
+          orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+        });
 
-    if (rooms.length === 0) {
-      for (const def of DEFAULT_ROOMS) {
-        await prisma.chatRoom.create({
-          data: {
-            name: def.name,
-            slug: def.slug,
-            description: def.description,
-            isDefault: def.isDefault,
-            isPrivate: false,
-          },
-        }).catch(() => {});
+        if (rooms.length === 0) {
+          const defaults = getFallbackChatRooms();
+          for (const def of defaults) {
+            await prisma.chatRoom.create({
+              data: {
+                id: def.id,
+                name: def.name,
+                slug: def.slug,
+                description: def.description,
+                isDefault: def.isDefault,
+                isPrivate: false,
+              },
+            }).catch(() => {});
+          }
+          rooms = await prisma.chatRoom.findMany({
+            orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+          });
+        }
+
+        if (rooms && rooms.length > 0) {
+          return NextResponse.json({ rooms });
+        }
+      } catch (dbErr) {
+        console.warn("Prisma error in chat rooms, using fallback store:", dbErr);
       }
-      rooms = await prisma.chatRoom.findMany({
-        orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
-      });
     }
 
-    return NextResponse.json({ rooms });
+    return NextResponse.json({ rooms: getFallbackChatRooms() });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: err.statusCode || 500 });
   }
 }
 
 /**
- * POST /api/chat/rooms: Create a new chat room (requires canCreateChatRooms permission)
+ * POST /api/chat/rooms: Create a new chat room
  */
 export async function POST(req: NextRequest) {
   try {
@@ -72,14 +78,34 @@ export async function POST(req: NextRequest) {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
 
-    const newRoom = await prisma.chatRoom.create({
-      data: {
-        name: cleanName,
-        slug: `${slug}-${Date.now().toString(36)}`,
-        description: cleanDesc,
-        createdById: user.id,
-      },
-    });
+    const roomId = `room_${Date.now().toString(36)}`;
+    const newRoom: FallbackChatRoom = {
+      id: roomId,
+      name: cleanName,
+      slug: `${slug}-${Date.now().toString(36)}`,
+      description: cleanDesc,
+      isDefault: false,
+      createdAt: new Date().toISOString(),
+      createdById: user.id,
+    };
+
+    getFallbackChatRooms().push(newRoom);
+
+    if (isDatabaseConfigured) {
+      try {
+        await prisma.chatRoom.create({
+          data: {
+            id: newRoom.id,
+            name: newRoom.name,
+            slug: newRoom.slug,
+            description: newRoom.description,
+            createdById: user.id,
+          },
+        });
+      } catch (dbErr) {
+        console.warn("Prisma room creation warning:", dbErr);
+      }
+    }
 
     return NextResponse.json({ success: true, room: newRoom });
   } catch (err: any) {

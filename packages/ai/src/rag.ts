@@ -101,13 +101,23 @@ export async function queryAskMyLibrary(
 
   let summaryText = "";
 
-  // Check query intent (e.g. order / sequence, beginner, bridge, history)
-  if (normalizedQuery.includes("sorrend") || normalizedQuery.includes("asimov") || normalizedQuery.includes("foundation")) {
-    summaryText = `A könyvtáradban található adatok alapján a kérdéses sorozat kötetei az alábbi ajánlott kronológiai / kiadási sorrendben követik egymást:\n\n${bookListBullets}\n\nKezdd az első alapművel a megalapozott élményért!`;
-  } else if (normalizedQuery.includes("kezd") || normalizedQuery.includes("kezdő") || normalizedQuery.includes("alap")) {
-    summaryText = `A gyűjteményedből a témával való ismerkedéshez a legáttekinthetőbb és legmagasabbra értékelt köteteket ajánlom:\n\n${bookListBullets}\n\nEzek a könyvek biztos alapokat nyújtanak a további elmélyüléshez.`;
+  const isOrderQuery = normalizedQuery.includes("sorrend") || normalizedQuery.includes("kronológia");
+  const isAuthorQuery = normalizedQuery.includes("kicsoda") || normalizedQuery.includes("ki az a") || normalizedQuery.includes("életrajz");
+  const isPlotQuery = normalizedQuery.includes("miről szól") || normalizedQuery.includes("cselekmény") || normalizedQuery.includes("tartalom");
+  const isBeginnerQuery = normalizedQuery.includes("kezd") || normalizedQuery.includes("kezdő") || normalizedQuery.includes("alap");
+
+  if (isOrderQuery) {
+    summaryText = `### 📚 Ajánlott Olvasási Sorrend\n\nA gyűjteményedben található adatok és irodalmi konvenciók alapján az alábbi logikai és kronológiai sorrend javasolt:\n\n${bookListBullets}\n\n> **Könyvtáros tanácsa:** Mindig az alapozó kötetekkel kezdd, hogy teljes egészében megértsd a világépítést és a karakterek összefüggéseit!`;
+  } else if (isAuthorQuery) {
+    const authorName = matchedBooks[0]?.authors[0]?.name || "a keresett szerző";
+    summaryText = `### ✍️ Szerzői Áttekintés: ${authorName}\n\nA könyvtáradban az alábbi művei érhetők el azonnali olvasásra és letöltésre:\n\n${bookListBullets}\n\nEzek a kötetek átfogó képet adnak az író stílusáról és legfontosabb témáiról.`;
+  } else if (isPlotQuery) {
+    const mainBook = matchedBooks[0];
+    summaryText = `### 📖 Ismertető: ${mainBook.title}\n\n**Szerző:** ${mainBook.authors.map((a) => a.name).join(", ")}\n\n${mainBook.description ? mainBook.description.slice(0, 400).replace(/<[^>]+>/g, "") + "..." : "A mű a könyvtár kiemelt állományának része, teljes terjedelmében elérhető."}\n\n**Kapcsolódó könyvek a gyűjteményedben:**\n\n${bookListBullets}`;
+  } else if (isBeginnerQuery) {
+    summaryText = `### 🌟 Ajánlott Belépő Kötetek\n\nA témával való ismerkedéshez a legáttekinthetőbb és legmagasabbra értékelt köteteket ajánlom:\n\n${bookListBullets}\n\nEzek a könyvek biztos alapokat nyújtanak a további elmélyüléshez.`;
   } else {
-    summaryText = `A könyvtáradban ${matchedBooks.length} releváns művet találtam a(z) „${query}” témakörben:\n\n${bookListBullets}\n\nA fenti kötetek mind elérhetők a gyűjteményedben és azonnal megnyithatók.`;
+    summaryText = `### 🏛️ Könyvtári Találatok\n\nA könyvtáradban ${matchedBooks.length} releváns művet találtam a(z) „${query}” kérdéskörben:\n\n${bookListBullets}\n\nA fenti kötetek mind elérhetők a gyűjteményedben és azonnal megnyithatók online olvasásra vagy letöltésre.`;
   }
 
   return {

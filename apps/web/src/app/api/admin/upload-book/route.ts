@@ -7,6 +7,7 @@ import {
   MegaBookRecord,
 } from "@/lib/mega-catalog";
 import { prisma, isDatabaseConfigured } from "@librarian/database";
+import { fetchMetadataForBook } from "@/lib/book-metadata-lookup";
 
 export const dynamic = "force-dynamic";
 
@@ -101,6 +102,23 @@ export async function POST(req: NextRequest) {
     }
     if (!author) {
       author = "Ismeretlen szerző";
+    }
+
+    if (!coverUrl || !description) {
+      try {
+        const autoMeta = await fetchMetadataForBook(title, author);
+        if (!coverUrl && autoMeta.coverUrl) {
+          coverUrl = autoMeta.coverUrl;
+        }
+        if (!description && autoMeta.description) {
+          description = autoMeta.description;
+        }
+        if ((genre === "Általános" || !genre) && autoMeta.genre && autoMeta.genre !== "Általános") {
+          genre = autoMeta.genre;
+        }
+      } catch (e) {
+        console.warn("Auto metadata lookup fallback on upload:", e);
+      }
     }
 
     if (!coverUrl) {

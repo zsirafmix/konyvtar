@@ -76,19 +76,62 @@ export default function AdminPage() {
   const [uploadCoverFile, setUploadCoverFile] = useState<File | null>(null);
   const [uploadBookFile, setUploadBookFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupSource, setLookupSource] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccessBook, setUploadSuccessBook] = useState<any | null>(null);
+
+  const lookupMetadata = async (filename?: string, titleToSearch?: string, authorToSearch?: string) => {
+    const qTitle = titleToSearch !== undefined ? titleToSearch : uploadTitle;
+    const qAuthor = authorToSearch !== undefined ? authorToSearch : uploadAuthor;
+    const qFile = filename || (uploadBookFile ? uploadBookFile.name : "");
+    if (!qFile && !qTitle) return;
+
+    setLookupLoading(true);
+    setLookupSource(null);
+    try {
+      const res = await fetch("/api/admin/lookup-book-metadata", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: qFile, title: qTitle, author: qAuthor }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.metadata) {
+          const m = data.metadata;
+          if (m.title) setUploadTitle(m.title);
+          if (m.author && m.author !== "Ismeretlen szerző") setUploadAuthor(m.author);
+          if (m.genre) setUploadGenre(m.genre);
+          if (m.publishedYear) setUploadYear(m.publishedYear.toString());
+          if (m.description) setUploadDescription(m.description);
+          if (m.coverUrl) setUploadCoverUrl(m.coverUrl);
+          setLookupSource(m.source || "Google Books");
+        }
+      }
+    } catch (err) {
+      console.warn("Metadata lookup error:", err);
+    } finally {
+      setLookupLoading(false);
+    }
+  };
 
   const handleBookFileSelect = (file: File) => {
     setUploadBookFile(file);
     const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+    let detectedAuthor = "";
+    let detectedTitle = nameWithoutExt;
+
     if (nameWithoutExt.includes(" - ")) {
       const parts = nameWithoutExt.split(" - ");
-      if (!uploadAuthor && parts[0]) setUploadAuthor(parts[0].trim());
-      if (!uploadTitle && parts[1]) setUploadTitle(parts[1].trim());
-    } else if (!uploadTitle) {
-      setUploadTitle(nameWithoutExt);
+      detectedAuthor = parts[0]?.trim() || "";
+      detectedTitle = parts.slice(1).join(" - ").trim() || "";
     }
+
+    if (detectedAuthor && !uploadAuthor) setUploadAuthor(detectedAuthor);
+    if (detectedTitle && !uploadTitle) setUploadTitle(detectedTitle);
+
+    // Automatically lookup metadata & cover
+    lookupMetadata(file.name, detectedTitle || uploadTitle, detectedAuthor || uploadAuthor);
   };
 
   const handleResetUploadForm = () => {
@@ -101,6 +144,8 @@ export default function AdminPage() {
     setUploadCoverFile(null);
     setUploadBookFile(null);
     setUploadError(null);
+    setLookupLoading(false);
+    setLookupSource(null);
     setUploadSuccessBook(null);
   };
 
@@ -1383,30 +1428,70 @@ export default function AdminPage() {
                   </div>
                 </div>
 
+                {/* Auto-lookup Status Banner */}
+                {lookupLoading && (
+                  <div className="flex items-center gap-2.5 text-xs text-amber-400 font-semibold bg-amber-500/10 border border-amber-500/25 p-3 rounded-xl animate-pulse">
+                    <RefreshCw className="w-4 h-4 animate-spin text-amber-400 flex-shrink-0" />
+                    <span>Könyvadatok és borító automatikus keresése (Google Books & Wikipédia)...</span>
+                  </div>
+                )}
+
+                {lookupSource && !lookupLoading && (
+                  <div className="flex items-center justify-between text-xs text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/25 p-3 rounded-xl">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                      <span>Metaadatok és borító sikeresen betöltve forrásból: {lookupSource}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => lookupMetadata()}
+                      className="text-[11px] text-emerald-300 underline hover:text-emerald-200 cursor-pointer"
+                    >
+                      Újra lekérés
+                    </button>
+                  </div>
+                )}
+
                 {/* Title & Author Inputs */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-foreground">Könyv címe *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Pl. Alapítvány és Birodalom"
-                      value={uploadTitle}
-                      onChange={(e) => setUploadTitle(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-secondary/60 border border-border text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-foreground">Könyv címe *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Pl. Alapítvány és Birodalom"
+                        value={uploadTitle}
+                        onChange={(e) => setUploadTitle(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-secondary/60 border border-border text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-foreground">Szerző</label>
+                      <input
+                        type="text"
+                        placeholder="Pl. Isaac Asimov"
+                        value={uploadAuthor}
+                        onChange={(e) => setUploadAuthor(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-secondary/60 border border-border text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-foreground">Szerző</label>
-                    <input
-                      type="text"
-                      placeholder="Pl. Isaac Asimov"
-                      value={uploadAuthor}
-                      onChange={(e) => setUploadAuthor(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-secondary/60 border border-border text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  </div>
+                  {(uploadTitle || uploadAuthor) && (
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        disabled={lookupLoading}
+                        onClick={() => lookupMetadata()}
+                        className="text-[11px] font-semibold text-primary hover:text-primary/80 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Metaadatok és borító automatikus keresése a beírt cím alapján</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Genre & Published Year */}
@@ -1455,31 +1540,55 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                {/* Cover selection */}
+                {/* Cover selection with preview */}
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-foreground block">Borítókép (opcionális)</label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <span className="text-[11px] text-muted-foreground block">Képfájl feltöltése (.jpg, .png):</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) setUploadCoverFile(f);
-                        }}
-                        className="text-xs text-muted-foreground file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-primary-foreground hover:file:opacity-90 cursor-pointer"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <span className="text-[11px] text-muted-foreground block">Vagy borító képlink (URL):</span>
-                      <input
-                        type="url"
-                        placeholder="https://images.unsplash.com/..."
-                        value={uploadCoverUrl}
-                        onChange={(e) => setUploadCoverUrl(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl bg-secondary/60 border border-border text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                      />
+                  <label className="text-xs font-bold text-foreground block">Borítókép</label>
+                  <div className="flex flex-col sm:flex-row gap-4 items-start">
+                    {uploadCoverUrl && (
+                      <div className="w-20 h-28 rounded-xl overflow-hidden border border-border/80 shadow-md bg-secondary/80 flex-shrink-0 relative group">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={uploadCoverUrl}
+                          alt="Borító előnézet"
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-1 text-[9px] text-center text-white font-medium">
+                          Előnézet
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+                      <div className="space-y-1">
+                        <span className="text-[11px] text-muted-foreground block">Képfájl (.jpg, .png):</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) {
+                              setUploadCoverFile(f);
+                              const reader = new FileReader();
+                              reader.onload = () => {
+                                if (typeof reader.result === "string") {
+                                  setUploadCoverUrl(reader.result);
+                                }
+                              };
+                              reader.readAsDataURL(f);
+                            }
+                          }}
+                          className="text-xs text-muted-foreground file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-primary-foreground hover:file:opacity-90 cursor-pointer w-full"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-[11px] text-muted-foreground block">Borító URL link:</span>
+                        <input
+                          type="url"
+                          placeholder="https://books.google.com/..."
+                          value={uploadCoverUrl}
+                          onChange={(e) => setUploadCoverUrl(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl bg-secondary/60 border border-border text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
