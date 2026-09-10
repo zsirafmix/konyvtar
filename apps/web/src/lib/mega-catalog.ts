@@ -31,6 +31,36 @@ export function norm(s: string): string {
   return (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
+export const HUNGARIAN_STOP_WORDS = new Set([
+  "a", "az", "egy", "es", "s", "hogy", "nem", "de", "vagy", "ha", "is",
+  "van", "vannak", "volt", "voltak", "lesz", "lesznek",
+  "melyik", "mely", "mi", "mit", "mik", "milyen", "hol", "hova", "honnan",
+  "ki", "kit", "kik", "kivel", "kicsoda",
+  "konyv", "konyvek", "konyvben", "konyvet", "konyvrol", "konyve", "konyvei",
+  "regen", "regeny", "regenyek", "regenyben", "irta", "iro", "szerzo",
+  "ajanlj", "ajanlanal", "ajanlasz", "ajanlas", "keresek", "keresem",
+  "tudsz", "mondj", "meselj", "beszelj", "mutass", "rol", "roluk", "nekem",
+  "neked", "szerinted", "olvasas", "olvasni", "olvassam", "szeretnek", "valami"
+]);
+
+export const ADULT_KEYWORDS = [
+  "szex", "szexualis", "szexualitas", "erotika", "erotikus", "18+", "kamaszutra", "porn", "porno"
+];
+
+export const CHILDREN_KEYWORDS = [
+  "mese", "mesek", "meseskonyv", "mesekonyv", "gyerek", "gyerekek", "gyermek", "gyermekek",
+  "ifjusag", "ifjusagi", "nepmese", "nepmesek", "csukas", "andersen", "grimm",
+  "babar", "kormos istvan", "walt disney", "susu"
+];
+
+export function tokenizeWords(str: string): string[] {
+  return norm(str)
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
 export function cleanSortKey(str: string): string {
   return (str || "")
     .normalize("NFD")
@@ -277,32 +307,64 @@ export function getMegaBookById(idOrSlug: string): MegaBookRecord | undefined {
 export function searchMegaBooks(query: string, limit: number = 30): MegaBookRecord[] {
   if (!query || !query.trim()) return allBooks.slice(0, limit);
 
-  const clean = query
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim();
+  const clean = norm(query).trim();
+  const tokens = tokenizeWords(clean);
+  const meaningfulWords = tokens.filter((w) => !HUNGARIAN_STOP_WORDS.has(w) && w.length > 1);
 
-  const words = clean.split(/\s+/).filter(Boolean);
+  // Detect adult / erotic inquiries
+  const isAdultQuery = tokens.some((w) => ADULT_KEYWORDS.some((ak) => w.includes(ak)));
 
   const matched: Array<{ book: MegaBookRecord; score: number }> = [];
 
   for (const b of allBooks) {
-    const titleNorm = b.title.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    const authorNorm = b.author.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const titleNorm = norm(b.title);
+    const authorNorm = norm(b.author);
+    const combinedNorm = `${authorNorm} ${titleNorm}`;
+
+    // STRICT SAFETY GUARD: If query asks for adult/erotic literature, never match children's literature or fairy tales!
+    if (isAdultQuery) {
+      const isChildrenBook = CHILDREN_KEYWORDS.some((ck) => combinedNorm.includes(ck));
+      if (isChildrenBook) continue;
+    }
+
+    const titleTokens = tokenizeWords(b.title);
+    const authorTokens = tokenizeWords(b.author);
 
     let score = 0;
-    if (titleNorm === clean) score += 100;
-    else if (titleNorm.startsWith(clean)) score += 50;
-    else if (titleNorm.includes(clean)) score += 30;
 
-    if (authorNorm === clean) score += 80;
-    else if (authorNorm.startsWith(clean)) score += 40;
-    else if (authorNorm.includes(clean)) score += 25;
+    // Full phrase exact & prefix matching
+    if (titleNorm === clean) score += 200;
+    else if (titleNorm.startsWith(clean)) score += 100;
+    else if (titleNorm.includes(clean)) score += 60;
 
-    for (const w of words) {
-      if (titleNorm.includes(w)) score += 10;
-      if (authorNorm.includes(w)) score += 8;
+    if (authorNorm === clean) score += 150;
+    else if (authorNorm.startsWith(clean)) score += 80;
+    else if (authorNorm.includes(clean)) score += 50;
+
+    // Token-based matching using meaningful search words
+    const wordsToSearch = meaningfulWords.length > 0 ? meaningfulWords : tokens;
+
+    for (const w of wordsToSearch) {
+      // Whole token match in title
+      if (titleTokens.includes(w)) {
+        score += 30;
+      } else if (titleTokens.some((t) => t.startsWith(w) && t.length - w.length <= 4)) {
+        score += 18;
+      }
+
+      // Whole token match in author
+      if (authorTokens.includes(w)) {
+        score += 25;
+      } else if (authorTokens.some((a) => a.startsWith(w) && a.length - w.length <= 3)) {
+        score += 15;
+      }
+    }
+
+    if (isAdultQuery) {
+      // Direct boost for adult/erotic titles when specifically asked
+      if (ADULT_KEYWORDS.some((ak) => titleNorm.includes(ak))) {
+        score += 40;
+      }
     }
 
     if (score > 0) {

@@ -1,5 +1,6 @@
 import { BookItem } from "@librarian/ai";
 import { fetchMolyMetadata } from "./book-metadata-lookup";
+import { HUNGARIAN_STOP_WORDS, ADULT_KEYWORDS } from "./mega-catalog";
 
 export interface AIKnowledgeContext {
   wikiTitle?: string;
@@ -48,10 +49,23 @@ export async function fetchMolyLibrarianContext(query: string): Promise<AIKnowle
  */
 export async function fetchHungarianWikipedia(query: string): Promise<AIKnowledgeContext | null> {
   try {
-    const cleanQuery = query
-      .replace(/[?!,.]/g, "")
-      .replace(/\b(könyv|regény|sorrend|sorrendben|olvassam|miről szól|ki az a|kicsoda|ajánlj|ajánlanál)\b/gi, "")
-      .trim();
+    const rawTokens = (query || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+
+    // If query is about adult/sex/erotica, avoid querying Wikipedia for generic keywords which return movies
+    const isAdult = rawTokens.some((t) => ADULT_KEYWORDS.some((ak) => t.includes(ak)));
+    if (isAdult) {
+      return null;
+    }
+
+    const cleanTokens = rawTokens.filter((w) => !HUNGARIAN_STOP_WORDS.has(w) && w.length > 1);
+    const cleanQuery = cleanTokens.length > 0 ? cleanTokens.join(" ") : rawTokens.join(" ");
 
     if (!cleanQuery) return null;
 
@@ -71,6 +85,19 @@ export async function fetchHungarianWikipedia(query: string): Promise<AIKnowledg
     const hit = sData.query?.search?.[0];
     if (!hit || !hit.title) return null;
 
+    // Skip movies, TV shows, and music albums when searching for literary titles
+    const hitTitleLower = hit.title.toLowerCase();
+    if (
+      hitTitleLower.includes("(film)") ||
+      hitTitleLower.includes("(amerikai film)") ||
+      hitTitleLower.includes("(televíziós sorozat)") ||
+      hitTitleLower.includes("(sorozat)") ||
+      hitTitleLower.includes("(dal)") ||
+      hitTitleLower.includes("(album)")
+    ) {
+      return null;
+    }
+
     // 2. Fetch summary of top hit
     const sumUrl = `https://hu.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(hit.title)}`;
     const sumController = new AbortController();
@@ -86,6 +113,19 @@ export async function fetchHungarianWikipedia(query: string): Promise<AIKnowledg
     const sumData = await sumRes.json();
 
     if (sumData.extract && !sumData.extract.includes("egyértelműsítő lap")) {
+      const lowerExtract = sumData.extract.toLowerCase();
+      // Ignore if it's explicitly a film / movie comedy instead of literature
+      if (
+        (lowerExtract.includes("amerikai romantikus vígjáték") ||
+          lowerExtract.includes("bemutatott amerikai vígjáték") ||
+          lowerExtract.includes("filmrendező")) &&
+        !lowerExtract.includes("regény") &&
+        !lowerExtract.includes("könyv") &&
+        !lowerExtract.includes("író")
+      ) {
+        return null;
+      }
+
       return {
         wikiTitle: sumData.title,
         wikiExtract: sumData.extract,
@@ -444,6 +484,33 @@ export function synthesizeHungarianLibrarianAnswer(
     }
   }
 
+  // 1.5. Adult / Erotic Literature Inquiry (e.g. "Melyik könyvben van szex?", "Erotikus regények")
+  const isAdultQuery =
+    norm.includes("szex") ||
+    norm.includes("erotik") ||
+    norm.includes("kamaszutra") ||
+    norm.includes("18+");
+
+  if (isAdultQuery) {
+    let answer = `### 🍷 Erotika, Intimitás és Érzékiség az Irodalomban\n\n`;
+    answer += `A szexualitás és az intimitás az emberi természet és a világirodalom egyik legősibb, legtermészetesebb témája. A finom pszichológiai romantikától a merész, nyílt társadalmi tabudöntögetésig a klasszikus és kortárs irodalmi alkotások rendkívül sokszínűen és mélyrehatóan dolgozták fel a testi és lelki vonzalmat.\n\n`;
+    answer += `#### 🏛️ A világirodalom klasszikus mérföldkövei e témában:\n`;
+    answer += `* **Giovanni Boccaccio: Dekameron** – A reneszánsz érzékiség, a pajkos szerelmi kalandok és a prűd képmutatást leleplező klasszikus novellafüzér.\n`;
+    answer += `* **D. H. Lawrence: Lady Chatterley szeretője** – A testi vágy és az őszinte lélek társadalmi konvenciók feletti győzelmének forradalmi, sokáig betiltott mesterműve.\n`;
+    answer += `* **Vladimir Nabokov: Lolita** – A megszállottság és a tiltott vonzalom virtuóz nyelvezetű pszichológiai remeke.\n`;
+    answer += `* **Henry Miller: Ráktérítő (Tropic of Cancer)** – A párizsi bohémlét és a szókimondó, nyers tabudöntögetés kultikus modern regénye.\n\n`;
+
+    if (matchedBooks.length > 0) {
+      answer += `#### 📚 A könyvtáradban azonnal elérhető felnőtt, romantikus és erotikus témájú kötetek:\n`;
+      for (const b of matchedBooks.slice(0, 6)) {
+        const authorStr = b.authors.map((a) => a.name).join(", ") || "Szerző";
+        answer += `* **[${b.title}](/book/${b.slug || b.id})** – ${authorStr} • [📖 Olvasás](/read/${b.slug || b.id})\n`;
+      }
+      answer += `\n*Kattints a fenti kötetekre az online olvasó megnyitásához vagy a fájlok letöltéséhez!*`;
+    }
+    return answer;
+  }
+
   // 2. Author Inquiry (e.g. "Kicsoda Szerb Antal?", "Mesélj Asimovról")
   const isAuthorQuery =
     norm.includes("kicsoda") ||
@@ -532,7 +599,15 @@ export function synthesizeHungarianLibrarianAnswer(
   let answer = `### 🏛️ Könyvtáros Ajánló és Szakvélemény\n\n`;
 
   if (wikiContext?.wikiExtract) {
-    answer += `> _"${wikiContext.wikiExtract.slice(0, 220)}..."_\n\n`;
+    const we = wikiContext.wikiExtract.toLowerCase();
+    const isNonBookWiki =
+      we.includes("amerikai romantikus vígjáték") ||
+      we.includes("bemutatott amerikai vígjáték") ||
+      we.includes("televíziós sorozat") ||
+      (we.includes("filmrendező") && !we.includes("regény") && !we.includes("könyv"));
+    if (!isNonBookWiki) {
+      answer += `> _"${wikiContext.wikiExtract.slice(0, 220)}..."_\n\n`;
+    }
   }
 
   if (molyContext?.molyDescription) {
