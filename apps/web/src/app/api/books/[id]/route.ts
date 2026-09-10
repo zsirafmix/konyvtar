@@ -121,16 +121,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
               entitlement: { allowed: true, reason: "A könyv szabadon letölthető.", isPrivate: false },
             },
           ],
-          reviews: [
-            {
-              id: "rev_demo_1",
-              userName: "Kovács Anna (Moderátor)",
-              rating: 5,
-              text: `Kiváló alapmű! Mindenkinek ajánlom elolvasásra.`,
-              createdAt: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(),
-              likeCount: 14,
-            },
-          ],
+          reviews: [],
         });
       }
 

@@ -15,7 +15,7 @@ export interface AuthenticatedUser {
   originalRole: Role;
   membershipStatus: "FREE" | "SUPPORTER";
   displayName: string;
-  avatarUrl?: string;
+  avatarUrl?: string | null;
   createdAt: string;
   permissions: UserPermissions;
   isImpersonating?: boolean;
@@ -41,8 +41,8 @@ export const DEMO_FALLBACK_USERS: Array<AuthenticatedUser & { password: string }
     role: "admin",
     originalRole: "SUPER_ADMIN",
     membershipStatus: "SUPPORTER",
-    displayName: "Főkönyvtáros Admin",
-    avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+    displayName: "Főadminisztrátor",
+    avatarUrl: null,
     createdAt: "2026-01-01T00:00:00.000Z",
     permissions: {
       canDownload: true,
@@ -64,8 +64,8 @@ export const DEMO_FALLBACK_USERS: Array<AuthenticatedUser & { password: string }
     role: "moderator",
     originalRole: "MODERATOR",
     membershipStatus: "SUPPORTER",
-    displayName: "Kovács Anna (Moderátor)",
-    avatarUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80",
+    displayName: "Moderátor",
+    avatarUrl: null,
     createdAt: "2026-01-01T00:00:00.000Z",
     permissions: {
       canDownload: true,
@@ -87,8 +87,8 @@ export const DEMO_FALLBACK_USERS: Array<AuthenticatedUser & { password: string }
     role: "superuser",
     originalRole: "USER",
     membershipStatus: "SUPPORTER",
-    displayName: "Nagy Bence (Támogató)",
-    avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
+    displayName: "VIP Támogató (Tesztfiók)",
+    avatarUrl: null,
     createdAt: "2026-01-01T00:00:00.000Z",
     permissions: {
       canDownload: true,
@@ -110,8 +110,8 @@ export const DEMO_FALLBACK_USERS: Array<AuthenticatedUser & { password: string }
     role: "user",
     originalRole: "USER",
     membershipStatus: "FREE",
-    displayName: "Tóth Gábor (Olvasó)",
-    avatarUrl: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
+    displayName: "Próba Olvasó (Tesztfiók)",
+    avatarUrl: null,
     createdAt: "2026-01-01T00:00:00.000Z",
     permissions: {
       canDownload: true,
@@ -123,7 +123,7 @@ export const DEMO_FALLBACK_USERS: Array<AuthenticatedUser & { password: string }
       canSendChatMessages: true,
       canCreateChatRooms: false,
       canModerateChat: false,
-      aiDailyLimit: 20,
+      aiDailyLimit: 50,
     },
   },
   {
@@ -133,8 +133,8 @@ export const DEMO_FALLBACK_USERS: Array<AuthenticatedUser & { password: string }
     role: "user",
     originalRole: "USER",
     membershipStatus: "FREE",
-    displayName: "Próba Olvasó (Tesztelő)",
-    avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+    displayName: "Próba Olvasó (Tesztfiók)",
+    avatarUrl: null,
     createdAt: "2026-01-01T00:00:00.000Z",
     permissions: {
       canDownload: true,
@@ -156,8 +156,8 @@ export const DEMO_FALLBACK_USERS: Array<AuthenticatedUser & { password: string }
     role: "superuser",
     originalRole: "USER",
     membershipStatus: "SUPPORTER",
-    displayName: "VIP Támogató (Tesztelő)",
-    avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
+    displayName: "VIP Támogató (Tesztfiók)",
+    avatarUrl: null,
     createdAt: "2026-01-01T00:00:00.000Z",
     permissions: {
       canDownload: true,

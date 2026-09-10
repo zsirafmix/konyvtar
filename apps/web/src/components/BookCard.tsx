@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Star, Heart, Bookmark, Check, ShieldCheck, Clock, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getBookShelfState, setShelfBookStatus, toggleFavoriteBook } from "@/lib/user-library";
 
 export interface BookCardProps {
   id: string;
@@ -43,6 +44,19 @@ export const BookCard: React.FC<BookCardProps> = ({
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [imgError, setImgError] = useState(false);
 
+  useEffect(() => {
+    const syncState = () => {
+      const state = getBookShelfState(slug);
+      if (state) {
+        if (state.isFavorite !== undefined) setIsFavorite(state.isFavorite);
+        if (state.readingStatus !== undefined) setStatus(state.readingStatus);
+      }
+    };
+    syncState();
+    window.addEventListener("librarian_shelf_updated", syncState);
+    return () => window.removeEventListener("librarian_shelf_updated", syncState);
+  }, [slug]);
+
   // Check 21 day rule for free members
   const isWithin21Days =
     distributionStatus === "PROTECTED_COMMERCIAL" &&
@@ -52,16 +66,19 @@ export const BookCard: React.FC<BookCardProps> = ({
   const handleFavoriteClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsFavorite(!isFavorite);
+    const newFav = toggleFavoriteBook({ id, slug, title, coverUrl, authors, distributionStatus });
+    setIsFavorite(newFav);
     onToggleFavorite?.();
   };
 
-  const handleStatusSelect = (newStatus: string, e: React.MouseEvent) => {
+  const handleStatusSelect = (newStatus: "READING" | "WANT_TO_READ" | "COMPLETED", e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setStatus(newStatus);
+    const updatedStatus = status === newStatus ? null : newStatus;
+    setStatus(updatedStatus);
+    setShelfBookStatus({ id, slug, title, coverUrl, authors, distributionStatus }, updatedStatus);
     setShowStatusMenu(false);
-    onStatusChange?.(newStatus);
+    onStatusChange?.(updatedStatus || "");
   };
 
   return (

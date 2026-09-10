@@ -18,6 +18,13 @@ import {
   Lock,
 } from "lucide-react";
 import { formatBytes, formatDateHu } from "@/lib/utils";
+import {
+  getBookShelfState,
+  setShelfBookStatus,
+  setShelfBookRating,
+  setShelfBookNote,
+  toggleFavoriteBook,
+} from "@/lib/user-library";
 
 export default function BookDetailPage({ params }: { params: { slug: string } }) {
   const { slug } = params;
@@ -28,10 +35,22 @@ export default function BookDetailPage({ params }: { params: { slug: string } })
   // Interactive user actions
   const [userRating, setUserRating] = useState<number>(0);
   const [readingStatus, setReadingStatus] = useState<string>("WANT_TO_READ");
+  const [isFavorite, setIsFavorite] = useState<boolean>(false);
   const [userNote, setUserNote] = useState<string>("");
   const [noteSaved, setNoteSaved] = useState<boolean>(false);
   const [imgError, setImgError] = useState<boolean>(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Sync existing shelf state from localStorage
+    const shelfState = getBookShelfState(slug);
+    if (shelfState) {
+      if (shelfState.readingStatus) setReadingStatus(shelfState.readingStatus);
+      if (shelfState.rating) setUserRating(shelfState.rating);
+      if (shelfState.note) setUserNote(shelfState.note);
+      if (shelfState.isFavorite !== undefined) setIsFavorite(shelfState.isFavorite);
+    }
+  }, [slug]);
 
   useEffect(() => {
     async function loadBook() {
@@ -51,7 +70,55 @@ export default function BookDetailPage({ params }: { params: { slug: string } })
     loadBook();
   }, [slug]);
 
+  const handleStatusChange = (newStatus: string) => {
+    setReadingStatus(newStatus);
+    if (book) {
+      setShelfBookStatus(
+        {
+          id: book.id,
+          slug: book.slug,
+          title: book.title,
+          coverUrl: book.coverUrl,
+          authors: book.authors,
+        },
+        newStatus as any
+      );
+    }
+  };
+
+  const handleRatingChange = (newRating: number) => {
+    setUserRating(newRating);
+    if (book) {
+      setShelfBookStatus(
+        {
+          id: book.id,
+          slug: book.slug,
+          title: book.title,
+          coverUrl: book.coverUrl,
+          authors: book.authors,
+        },
+        readingStatus as any
+      );
+      setShelfBookRating(book.slug, newRating);
+    }
+  };
+
+  const handleToggleFavorite = () => {
+    if (!book) return;
+    const newFav = toggleFavoriteBook({
+      id: book.id,
+      slug: book.slug,
+      title: book.title,
+      coverUrl: book.coverUrl,
+      authors: book.authors,
+    });
+    setIsFavorite(newFav);
+  };
+
   const handleSaveNote = () => {
+    if (book) {
+      setShelfBookNote(book.slug, userNote);
+    }
     setNoteSaved(true);
     setTimeout(() => setNoteSaved(false), 2500);
   };
@@ -167,21 +234,33 @@ export default function BookDetailPage({ params }: { params: { slug: string } })
             ))}
           </div>
 
-          {/* User Interactivity: Status, Rating */}
+          {/* User Interactivity: Status, Rating, Favorite */}
           <div className="p-4 rounded-2xl bg-card border border-border flex flex-wrap items-center justify-between gap-4 mt-4">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <label className="text-xs font-semibold text-muted-foreground">Státuszod:</label>
               <select
                 value={readingStatus}
-                onChange={(e) => setReadingStatus(e.target.value)}
-                className="px-3 py-1.5 rounded-xl bg-secondary text-foreground text-xs font-medium border border-border focus:outline-none focus:ring-1 focus:ring-primary"
+                onChange={(e) => handleStatusChange(e.target.value)}
+                className="px-3 py-1.5 rounded-xl bg-secondary text-foreground text-xs font-medium border border-border focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
               >
                 <option value="WANT_TO_READ">El akarom olvasni</option>
                 <option value="READING">Jelenleg olvasom</option>
                 <option value="COMPLETED">Befejeztem</option>
-                <option value="PAUSED">Szüneteltetem</option>
-                <option value="ABANDONED">Félbehagytam</option>
               </select>
+
+              <button
+                type="button"
+                onClick={handleToggleFavorite}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                  isFavorite
+                    ? "bg-red-500/10 border-red-500/30 text-red-500 shadow-sm"
+                    : "bg-secondary text-muted-foreground hover:text-foreground border-border"
+                }`}
+                title={isFavorite ? "Eltávolítás a kedvencek közül" : "Hozzáadás a kedvencekhez"}
+              >
+                <Heart className={`w-3.5 h-3.5 ${isFavorite ? "fill-current text-red-500" : ""}`} />
+                <span>{isFavorite ? "Kedvenc" : "Kedvenc"}</span>
+              </button>
             </div>
 
             <div className="flex items-center gap-1.5">
@@ -189,8 +268,10 @@ export default function BookDetailPage({ params }: { params: { slug: string } })
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
                   key={star}
-                  onClick={() => setUserRating(star)}
-                  className="p-1 text-amber-500 transition-transform hover:scale-110"
+                  type="button"
+                  onClick={() => handleRatingChange(star)}
+                  className="p-1 text-amber-500 transition-transform hover:scale-110 cursor-pointer"
+                  title={`${star} csillag`}
                 >
                   <Star className={`w-4 h-4 ${star <= userRating ? "fill-current" : "stroke-current text-muted-foreground"}`} />
                 </button>

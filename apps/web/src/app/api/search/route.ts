@@ -105,16 +105,11 @@ export async function GET(req: NextRequest) {
           type === "all" || type === "lists"
             ? [
                 { id: "l1", title: "Alapvető Hard Sci-Fi Mesterművek", likeCount: 28 },
-                { id: "l2", title: "20 Alapvető Kiberpunk Könyv", likeCount: 42 },
+                { id: "l2", title: "A Magyar Irodalom Örök Klasszikusai", likeCount: 35 },
+                { id: "l3", title: "Izgalmas Rejtélyek és Krimik", likeCount: 19 },
               ].filter((l) => l.title.toLowerCase().includes(trimmed))
             : [],
-        users:
-          type === "all" || type === "users"
-            ? [
-                { id: "u1", displayName: "Kovács Anna", avatarUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150" },
-                { id: "u2", displayName: "Kiss Péter", avatarUrl: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150" },
-              ].filter((u) => u.displayName.toLowerCase().includes(trimmed))
-            : [],
+        users: [],
       };
     };
 

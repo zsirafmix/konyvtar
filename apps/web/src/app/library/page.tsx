@@ -1,9 +1,27 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, Suspense } from "react";
 import Link from "next/link";
-import { Library, BookOpen, Bookmark, CheckCircle2, Lock, Cloud, Sparkles, ArrowUpDown, Search } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import {
+  Library,
+  BookOpen,
+  Bookmark,
+  CheckCircle2,
+  Heart,
+  Lock,
+  Cloud,
+  Sparkles,
+  ArrowUpDown,
+  Search,
+  Compass,
+} from "lucide-react";
 import { BookCard } from "@/components/BookCard";
+import {
+  getAllShelfBooks,
+  getShelfBooksByStatus,
+  ShelfBook,
+} from "@/lib/user-library";
 
 const SORT_OPTIONS = [
   { value: "popular", label: "Ajánlott / Népszerű" },
@@ -14,14 +32,41 @@ const SORT_OPTIONS = [
   { value: "rating_desc", label: "Legjobbra értékelt" },
 ];
 
-export default function LibraryPage() {
-  const [activeTab, setActiveTab] = useState<string>("ALL");
-  const [books, setBooks] = useState<any[]>([]);
+function LibraryContent() {
+  const searchParams = useSearchParams();
+  const urlStatus = searchParams?.get("status")?.toUpperCase();
+
+  const [activeTab, setActiveTab] = useState<string>(
+    urlStatus && ["READING", "WANT_TO_READ", "COMPLETED", "FAVORITES", "PRIVATE"].includes(urlStatus)
+      ? urlStatus
+      : "ALL"
+  );
+  const [catalogBooks, setCatalogBooks] = useState<any[]>([]);
+  const [shelfBooks, setShelfBooks] = useState<ShelfBook[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<string>("popular");
   const [searchFilter, setSearchFilter] = useState<string>("");
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
+
+  // Sync shelf books from localStorage
+  const refreshShelf = useCallback(() => {
+    const all = getAllShelfBooks();
+    setShelfBooks(all);
+  }, []);
+
+  useEffect(() => {
+    refreshShelf();
+    window.addEventListener("librarian_shelf_updated", refreshShelf);
+    return () => window.removeEventListener("librarian_shelf_updated", refreshShelf);
+  }, [refreshShelf]);
+
+  // If URL changes, sync activeTab
+  useEffect(() => {
+    if (urlStatus && ["READING", "WANT_TO_READ", "COMPLETED", "FAVORITES", "PRIVATE"].includes(urlStatus)) {
+      setActiveTab(urlStatus);
+    }
+  }, [urlStatus]);
 
   const fetchBooks = useCallback(async () => {
     setLoading(true);
@@ -29,7 +74,7 @@ export default function LibraryPage() {
       const res = await fetch(`/api/books?limit=60&sortBy=${sortBy}`);
       if (res.ok) {
         const data = await res.json();
-        setBooks(data.books || []);
+        setCatalogBooks(data.books || []);
       }
     } catch (err) {
       console.error(err);
@@ -66,7 +111,22 @@ export default function LibraryPage() {
     }
   };
 
-  const filteredBooks = books.filter((b) => {
+  // Determine which books to display based on activeTab
+  let displayBooks: any[] = [];
+  const isShelfTab = ["READING", "WANT_TO_READ", "COMPLETED", "FAVORITES"].includes(activeTab);
+
+  if (isShelfTab) {
+    if (activeTab === "FAVORITES") {
+      displayBooks = shelfBooks.filter((b) => b.isFavorite);
+    } else {
+      displayBooks = shelfBooks.filter((b) => b.readingStatus === activeTab);
+    }
+  } else {
+    displayBooks = catalogBooks;
+  }
+
+  // Filter by search query
+  const filteredBooks = displayBooks.filter((b) => {
     if (activeTab === "PRIVATE" && b.distributionStatus !== "PRIVATE") return false;
 
     if (searchFilter.trim()) {
@@ -79,6 +139,25 @@ export default function LibraryPage() {
     return true;
   });
 
+  const getTabEmptyLabel = () => {
+    switch (activeTab) {
+      case "READING":
+        return "Jelenleg még nem jelöltél meg könyvet folyamatban lévő olvasmányként.";
+      case "WANT_TO_READ":
+        return "Még nincsenek elolvasásra váró könyvek a várólistádon.";
+      case "COMPLETED":
+        return "Még nem jelöltél meg befejezett könyvet.";
+      case "FAVORITES":
+        return "Még nem adtál hozzá kedvenc könyveket.";
+      case "PRIVATE":
+        return "Nincsenek privát könyveid feltöltve.";
+      default:
+        return searchFilter
+          ? "A keresési kifejezésre nem találtunk könyvet."
+          : "Ebben a nézetben még nincsenek könyveid.";
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-8 py-8 space-y-6 pb-20">
       {/* Header & Storage Scanner Trigger */}
@@ -86,7 +165,7 @@ export default function LibraryPage() {
         <div>
           <h1 className="text-3xl font-extrabold text-foreground tracking-tight">Könyvtáram</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Saját könyveid, felhőtároló kapcsolatok és olvasási állapotaid.
+            Saját könyveid, olvasási polcaid és felhőtároló kapcsolataid.
           </p>
         </div>
 
@@ -114,14 +193,22 @@ export default function LibraryPage() {
           { id: "READING", label: "Jelenleg olvasom", icon: BookOpen },
           { id: "WANT_TO_READ", label: "El akarom olvasni", icon: Bookmark },
           { id: "COMPLETED", label: "Befejezett", icon: CheckCircle2 },
+          { id: "FAVORITES", label: "Kedvencek", icon: Heart },
           { id: "PRIVATE", label: "Privát fájljaim", icon: Lock },
         ].map((tab) => {
           const Icon = tab.icon;
+          const count =
+            tab.id === "FAVORITES"
+              ? shelfBooks.filter((b) => b.isFavorite).length
+              : ["READING", "WANT_TO_READ", "COMPLETED"].includes(tab.id)
+              ? shelfBooks.filter((b) => b.readingStatus === tab.id).length
+              : null;
+
           return (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold transition-colors cursor-pointer ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
                 activeTab === tab.id
                   ? "bg-primary/20 text-primary"
                   : "text-muted-foreground hover:text-foreground hover:bg-secondary"
@@ -129,6 +216,11 @@ export default function LibraryPage() {
             >
               <Icon className="w-3.5 h-3.5" />
               <span>{tab.label}</span>
+              {count !== null && count > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-primary/20 text-primary text-[10px] font-bold">
+                  {count}
+                </span>
+              )}
             </button>
           );
         })}
@@ -147,49 +239,67 @@ export default function LibraryPage() {
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-          <span className="text-xs font-semibold text-muted-foreground mr-1 flex items-center gap-1">
-            <ArrowUpDown className="w-3.5 h-3.5" />
-            Rendezés:
-          </span>
-          {SORT_OPTIONS.map((opt) => {
-            const isActive = sortBy === opt.value;
-            return (
-              <button
-                key={opt.value}
-                onClick={() => setSortBy(opt.value)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  isActive
-                    ? "bg-primary text-primary-foreground shadow-sm scale-105"
-                    : "bg-background/90 hover:bg-secondary text-muted-foreground hover:text-foreground border border-border/80"
-                }`}
-              >
-                {opt.label}
-              </button>
-            );
-          })}
-        </div>
+        {!isShelfTab && (
+          <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+            <span className="text-xs font-semibold text-muted-foreground mr-1 flex items-center gap-1">
+              <ArrowUpDown className="w-3.5 h-3.5" />
+              Rendezés:
+            </span>
+            {SORT_OPTIONS.map((opt) => {
+              const isActive = sortBy === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => setSortBy(opt.value)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    isActive
+                      ? "bg-primary text-primary-foreground shadow-sm scale-105"
+                      : "bg-background/90 hover:bg-secondary text-muted-foreground hover:text-foreground border border-border/80"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Books Grid */}
-      {loading ? (
+      {loading && !isShelfTab ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => (
             <div key={n} className="aspect-[2/3] bg-secondary/40 rounded-xl animate-pulse" />
           ))}
         </div>
       ) : filteredBooks.length === 0 ? (
-        <div className="text-center py-16 bg-secondary/20 rounded-2xl border border-dashed border-border space-y-3">
+        <div className="text-center py-16 bg-secondary/20 rounded-2xl border border-dashed border-border space-y-4 px-4">
           <Library className="w-10 h-10 mx-auto text-muted-foreground/50" />
-          <h3 className="text-base font-bold text-foreground">Nincs találat a könyvtárban</h3>
-          <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-            {searchFilter ? "A keresési kifejezésre nem találtunk könyvet a könyvtáradban." : "Ebben a nézetben még nincsenek könyveid."}
-          </p>
+          <div className="space-y-1">
+            <h3 className="text-base font-bold text-foreground">Nincs megjeleníthető könyv</h3>
+            <p className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
+              {getTabEmptyLabel()}
+            </p>
+          </div>
+          {isShelfTab && (
+            <Link
+              href="/catalog"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 transition-opacity"
+            >
+              <Compass className="w-3.5 h-3.5" />
+              <span>Böngéssz a 11 472 kötet között</span>
+            </Link>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
           {filteredBooks.map((book) => (
-            <BookCard key={book.id} {...book} />
+            <BookCard
+              key={book.id || book.slug}
+              {...book}
+              readingStatus={book.readingStatus || undefined}
+              isFavorite={book.isFavorite || false}
+            />
           ))}
         </div>
       )}
@@ -197,3 +307,21 @@ export default function LibraryPage() {
   );
 }
 
+export default function LibraryPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 py-8 space-y-6 animate-pulse">
+          <div className="h-10 w-48 bg-secondary/50 rounded-xl" />
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="aspect-[2/3] bg-secondary/40 rounded-xl" />
+            ))}
+          </div>
+        </div>
+      }
+    >
+      <LibraryContent />
+    </Suspense>
+  );
+}

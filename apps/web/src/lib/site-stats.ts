@@ -56,95 +56,22 @@ function getTodayKey(): string {
 }
 
 const defaultInitialState: SiteStatsState = {
-  totalDownloads: 1428,
-  downloadsToday: 47,
+  totalDownloads: 0,
+  downloadsToday: 0,
   lastResetDate: getTodayKey(),
   downloadsByFormat: {
-    EPUB: 980,
-    PDF: 320,
-    MOBI: 94,
-    AZW3: 34,
+    EPUB: 0,
+    PDF: 0,
+    MOBI: 0,
+    AZW3: 0,
   },
-  topDownloadedBooks: [
-    { title: "A tizennégy karátos autó", author: "Rejtő Jenő", format: "EPUB", count: 86, lastDownloaded: new Date(Date.now() - 15 * 60000).toISOString() },
-    { title: "Alapítvány", author: "Isaac Asimov", format: "EPUB", count: 74, lastDownloaded: new Date(Date.now() - 32 * 60000).toISOString() },
-    { title: "A Dűne", author: "Frank Herbert", format: "PDF", count: 68, lastDownloaded: new Date(Date.now() - 55 * 60000).toISOString() },
-    { title: "Utas és holdvilág", author: "Szerb Antal", format: "EPUB", count: 59, lastDownloaded: new Date(Date.now() - 120 * 60000).toISOString() },
-    { title: "Solaris", author: "Stanisław Lem", format: "MOBI", count: 43, lastDownloaded: new Date(Date.now() - 180 * 60000).toISOString() },
-    { title: "A gyertyák csonkig égnek", author: "Márai Sándor", format: "EPUB", count: 38, lastDownloaded: new Date(Date.now() - 240 * 60000).toISOString() },
-  ],
-  recentEvents: [
-    {
-      id: "ev_init_1",
-      type: "download",
-      title: "Könyv letöltve",
-      description: "Rejtő Jenő: A tizennégy karátos autó (EPUB) letöltésre került",
-      timestamp: new Date(Date.now() - 8 * 60000).toISOString(),
-      badge: "EPUB",
-    },
-    {
-      id: "ev_init_2",
-      type: "login",
-      title: "Tesztelő belépés",
-      description: "Egy látogató belépett a Tesztelő Olvasó fiókkal",
-      timestamp: new Date(Date.now() - 18 * 60000).toISOString(),
-      badge: "Olvasó",
-    },
-    {
-      id: "ev_init_3",
-      type: "ai_query",
-      title: "AI Könyvtáros kérdés",
-      description: "Kérdés: „Melyik könyvvel kezdjem az Alapítvány sorozatot?”",
-      timestamp: new Date(Date.now() - 34 * 60000).toISOString(),
-      badge: "AI",
-    },
-    {
-      id: "ev_init_4",
-      type: "reading",
-      title: "Online olvasás megnyitva",
-      description: "Frank Herbert: A Dűne megnyitva a böngészőben",
-      timestamp: new Date(Date.now() - 52 * 60000).toISOString(),
-      badge: "Olvasó",
-    },
-    {
-      id: "ev_init_5",
-      type: "support",
-      title: "Új Támogató ($1)",
-      description: "Új támogató csatlakozott a könyvtár fenntartásához",
-      timestamp: new Date(Date.now() - 140 * 60000).toISOString(),
-      badge: "VIP",
-    },
-  ],
-  recentRegistrations: [
-    {
-      id: "reg_01",
-      email: "tesztelo@librarian.ai",
-      name: "Próba Olvasó (Tesztelő)",
-      role: "user",
-      registeredAt: new Date(Date.now() - 60 * 60000).toISOString(),
-      isTester: true,
-    },
-    {
-      id: "reg_02",
-      email: "vip_teszt@librarian.ai",
-      name: "VIP Támogató (Tesztelő)",
-      role: "superuser",
-      registeredAt: new Date(Date.now() - 180 * 60000).toISOString(),
-      isTester: true,
-    },
-    {
-      id: "reg_03",
-      email: "olvaso_peter@gmail.com",
-      name: "Varga Péter",
-      role: "user",
-      registeredAt: new Date(Date.now() - 420 * 60000).toISOString(),
-      isTester: false,
-    },
-  ],
-  aiQueriesToday: 32,
-  totalAiQueries: 894,
-  readingSessionsToday: 64,
-  totalReadingSessions: 2410,
+  topDownloadedBooks: [],
+  recentEvents: [],
+  recentRegistrations: [],
+  aiQueriesToday: 0,
+  totalAiQueries: 0,
+  readingSessionsToday: 0,
+  totalReadingSessions: 0,
 };
 
 let cachedStats: SiteStatsState | null = null;
@@ -413,31 +340,7 @@ export async function getFullAdminStats() {
     }
   }
 
-  // Ensure there are at least some active visitors for demonstration if server just rebooted
-  if (activePresenceMap.size === 0) {
-    activePresenceMap.set("vis_live_1", {
-      id: "vis_live_1",
-      name: "Vendég Olvasó (Budapest)",
-      role: "guest",
-      isGuest: true,
-      lastSeen: new Date().toISOString(),
-    });
-    activePresenceMap.set("vis_live_2", {
-      id: "vis_live_2",
-      name: "Kovács Anna (Olvasó)",
-      role: "user",
-      isGuest: false,
-      lastSeen: new Date(Date.now() - 2 * 60000).toISOString(),
-    });
-    activePresenceMap.set("vis_live_3", {
-      id: "vis_live_3",
-      name: "Vendég Olvasó (Debrecen)",
-      role: "guest",
-      isGuest: true,
-      lastSeen: new Date(Date.now() - 4 * 60000).toISOString(),
-    });
-  }
-
+  // Active presence shows only genuinely connected users/guests
   const activeVisitors = Array.from(activePresenceMap.values());
   const onlineUsersCount = activeVisitors.filter((v) => !v.isGuest).length;
   const onlineGuestsCount = activeVisitors.filter((v) => v.isGuest).length;

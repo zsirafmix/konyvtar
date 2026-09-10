@@ -13,13 +13,13 @@ export const DashboardGrid: React.FC = () => {
   const tiles: DashboardTileProps[] = [
     {
       title: "Katalógus",
-      description: "Böngéssz a 11 472 Calibre felhőkötet között, szűrj 22 kategóriára, vagy keress szerző és cím szerint.",
+      description: "Böngéssz a 11 472 Calibre felhőkötet között, szűrj 103 kategóriára, vagy keress szerző és cím szerint.",
       href: "/library",
       icon: Library,
       badge: "11 472 kötet",
       accentColor: "blue",
       statLabel: "Kategóriák",
-      statValue: "22 Műfaj",
+      statValue: "103 Műfaj",
     },
     {
       title: "Fórum",
