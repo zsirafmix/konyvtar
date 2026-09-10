@@ -26,15 +26,7 @@ export default function AiLibrarianChatPage() {
       matchedBooks: any[];
       confidence: number;
     }>
-  >([
-    {
-      question: "Milyen sorrendben érdemes olvasni az Alapítvány könyveket?",
-      answer:
-        "### 📚 Alapítvány-Birodalom-Robot ciklus – Ajánlott olvasási sorrend\n\n**Szerző:** Isaac Asimov\n\nA sorozat köteteit a következő logikai és kanonikus sorrendben érdemes olvasni a legteljesebb élményért:\n\n* 1. **Alapítvány** (1951) – A Hari Seldon által indított pszichohistória alapköve\n* 2. **Alapítvány és Birodalom** (1952) – Az Öszvér megjelenése és a Seldon-terv kisiklása\n* 3. **Második Alapítvány** (1953) – A szellemi vezetők és pszichikusok harca\n* 4. **Az Alapítvány pereme** (1982) – Golan Trevize expedíciója a Gaia rejtélyéhez\n* 5. **Alapítvány és Föld** (1986) – Az emberiség eredetének felkutatása\n\n> **Könyvtáros tanácsa:** Kezdőknek kifejezetten az eredeti klasszikus trilógiát javasolt először elolvasni, mert ez nyújtja a legkatartikusabb irodalmi élményt!\n\nMindegyik kötet megtalálható és azonnal olvasható a digitális könyvtáradban!",
-      matchedBooks: [],
-      confidence: 0.98,
-    },
-  ]);
+  >([]);
 
   const sampleQuestions = [
     "Milyen sorrendben érdemes olvasni az Alapítvány könyveket?",
@@ -145,6 +137,16 @@ export default function AiLibrarianChatPage() {
 
       {/* Conversation Thread */}
       <div className="space-y-6">
+        {history.length === 0 && !loading && (
+          <div className="p-8 rounded-3xl bg-secondary/20 border border-dashed border-border text-center space-y-3">
+            <BookOpen className="w-10 h-10 mx-auto text-muted-foreground/50" />
+            <h3 className="font-bold text-base text-foreground">Készen áll a kérdéseidre</h3>
+            <p className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
+              Kattints a fenti minta-kérdések bármelyikére, vagy írd be saját kérdésedet az alábbi szövegmezőbe!
+            </p>
+          </div>
+        )}
+
         {history.map((item, idx) => (
           <div key={idx} className="space-y-3">
             {/* User Question */}
