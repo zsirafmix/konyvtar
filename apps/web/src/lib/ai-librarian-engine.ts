@@ -1,4 +1,5 @@
 import { BookItem } from "@librarian/ai";
+import { fetchMolyMetadata } from "./book-metadata-lookup";
 
 export interface AIKnowledgeContext {
   wikiTitle?: string;
@@ -8,6 +9,38 @@ export interface AIKnowledgeContext {
   googleCategories?: string[];
   googlePublishedYear?: number;
   authorBio?: string;
+  molyTitle?: string;
+  molyAuthor?: string;
+  molyDescription?: string;
+  molyRating?: number;
+  molyTags?: string[];
+}
+
+/**
+ * Fetch knowledge from Moly.hu
+ */
+export async function fetchMolyLibrarianContext(query: string): Promise<AIKnowledgeContext | null> {
+  try {
+    const cleanQuery = query
+      .replace(/[?!,.]/g, "")
+      .replace(/\b(könyv|regény|sorrend|sorrendben|olvassam|miről szól|ki az a|kicsoda|ajánlj|ajánlanál)\b/gi, "")
+      .trim();
+
+    if (!cleanQuery) return null;
+
+    const moly = await fetchMolyMetadata(cleanQuery);
+    if (!moly) return null;
+
+    return {
+      molyTitle: moly.title,
+      molyAuthor: moly.author,
+      molyDescription: moly.description,
+      molyRating: moly.rating,
+      molyTags: moly.genre ? [moly.genre] : [],
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -22,7 +55,7 @@ export async function fetchHungarianWikipedia(query: string): Promise<AIKnowledg
 
     if (!cleanQuery) return null;
 
-    // 1. First search via Wikipedia search API
+    // 1. Search via Wikipedia search API
     const searchUrl = `https://hu.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(cleanQuery)}&utf8=&format=json`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3500);
@@ -60,7 +93,7 @@ export async function fetchHungarianWikipedia(query: string): Promise<AIKnowledg
       };
     }
     return null;
-  } catch (err) {
+  } catch {
     return null;
   }
 }
@@ -96,7 +129,7 @@ export async function fetchGoogleBooksDetails(query: string): Promise<AIKnowledg
       };
     }
     return null;
-  } catch (err) {
+  } catch {
     return null;
   }
 }
@@ -109,7 +142,6 @@ export async function queryExternalLLM(prompt: string): Promise<string | null> {
   const groqKey = process.env.GROQ_API_KEY;
   const openRouterKey = process.env.OPENROUTER_API_KEY;
 
-  // 1. Try Gemini API if key available
   if (geminiKey) {
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
@@ -121,7 +153,7 @@ export async function queryExternalLLM(prompt: string): Promise<string | null> {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.4, maxOutputTokens: 1000 },
+          generationConfig: { temperature: 0.4, maxOutputTokens: 1200 },
         }),
         signal: controller.signal,
       });
@@ -137,7 +169,6 @@ export async function queryExternalLLM(prompt: string): Promise<string | null> {
     }
   }
 
-  // 2. Try Groq API if key available
   if (groqKey) {
     try {
       const url = "https://api.groq.com/openai/v1/chat/completions";
@@ -154,7 +185,7 @@ export async function queryExternalLLM(prompt: string): Promise<string | null> {
           model: "llama-3.3-70b-versatile",
           messages: [{ role: "user", content: prompt }],
           temperature: 0.4,
-          max_tokens: 1000,
+          max_tokens: 1200,
         }),
         signal: controller.signal,
       });
@@ -170,7 +201,6 @@ export async function queryExternalLLM(prompt: string): Promise<string | null> {
     }
   }
 
-  // 3. Try OpenRouter free models if key available
   if (openRouterKey) {
     try {
       const url = "https://openrouter.ai/api/v1/chat/completions";
@@ -187,7 +217,7 @@ export async function queryExternalLLM(prompt: string): Promise<string | null> {
           model: "meta-llama/llama-3.2-3b-instruct:free",
           messages: [{ role: "user", content: prompt }],
           temperature: 0.4,
-          max_tokens: 1000,
+          max_tokens: 1200,
         }),
         signal: controller.signal,
       });
@@ -227,7 +257,7 @@ const FAMOUS_SERIES_ORDERS: Record<
       "8. Második Alapítvány (1953) – A szellemi vezetők harca",
       "9. Az Alapítvány pereme (1982)",
       "10. Alapítvány és Föld (1986) – A nagy szintézis",
-      "Kiegészítő előzménykötetek (érdemes a klasszikus trilógia után olvasni): Előjáték az Alapítványhoz, Előre az Alapítványhoz",
+      "Kiegészítő előzménykötetek: Előjáték az Alapítványhoz, Előre az Alapítványhoz",
     ],
     advice: "Kezdőknek kifejezetten az eredeti Alapítvány-trilógiát (Alapítvány, Alapítvány és Birodalom, Második Alapítvány) javasolt először elolvasni, mert ez nyújtja a legkatartikusabb irodalmi élményt!",
   },
@@ -284,13 +314,13 @@ const FAMOUS_SERIES_ORDERS: Record<
       "5. A szilmarilok (mély mitológiai háttér, Arda teremtése és az első korok)",
       "6. Befejezetlen regék Középföldéről és Númenorról",
     ],
-    advice: "A hobbit elolvasása után A Gyűrűk Ura trilógia a fő mű; A szilmarilokat csak a trilógia után érdemes kézbe venni annak enciklopédikus mélysége miatt.",
+    advice: "A hobbit elolvasása után A Gyűrűk Ura trilógia a fő mű; A szilmarilokat csak a trilógia után érdemes kézbe venni.",
   },
   rejto: {
     name: "Rejtő Jenő (P. Howard) légiós és humoros regényei",
     author: "Rejtő Jenő",
     recommendedOrder: [
-      "1. A tizennégy karátos autó (Gorcsev Iván és a Nobel-díj legendás kezdete)",
+      "1. A tizennégy karátos autó (Gorcsev Iván és a Nobel-díj kezdete)",
       "2. A három testőr Afrikában (Csülök, Senki Alfonz és Tuskó Hopkins)",
       "3. Piszkos Fred, a kapitány (A Csendes-óceán réme és Fülig Jimmy)",
       "4. Piszkos Fred közbelép (Fülig Jimmy őszinte sajnálatára)",
@@ -299,72 +329,73 @@ const FAMOUS_SERIES_ORDERS: Record<
       "7. A láthatatlan légió",
       "8. Vesztegzár a Grand Hotelben (Felix van der Goude és a bubópestis-komédia)",
     ],
-    advice: "Rejtő regényei önmagukban is zseniálisak és önállóan is olvashatók, de a Piszkos Fred és a három jómadár kalandjait a fenti sorrendben a legszórakoztatóbb élvezni.",
+    advice: "Rejtő regényei önmagukban is kiválóak, de a Piszkos Fred és a három jómadár kalandjait a fenti sorrendben a legszórakoztatóbb élvezni.",
   },
   lem: {
     name: "Stanisław Lem filozofikus sci-fi művei",
     author: "Stanisław Lem",
     recommendedOrder: [
       "1. Solaris (1961) – Az élő, gondolkodó óceán és az emberi megismerés határai",
-      "2. Kiberiáda (Trurl és Klapanciusz konstruktőrök zseniális gépmeséi)",
+      "2. Kiberiáda (Trurl és Klapanciusz konstruktőrök gépmeséi)",
       "3. Csillagnapló (Ijon Tichy űrutazó abszurd és mélyenszántó kalandjai)",
       "4. Az Úr hangja (A földönkívüli üzenet megfejtésének dilemmája)",
       "5. Éden (Kényszerleszállás és a megérthetetlen civilizáció)",
-      "6. Visszatérés (A csillagokból megtért űrhajós és a betiltott agresszió világa)",
+      "6. A Legyőzhetetlen (A mikromechanikus rovarrajok evolúciója)",
     ],
-    advice: "Kezdésnek a Solaris adja a legmélyebb filozófiai élményt, míg a humorosabb, szatírikus oldalért a Kiberiáda a legjobb belépő Lem világába.",
+    advice: "Kezdésnek a Solaris adja a legmélyebb filozófiai élményt, míg a humorosabb oldalért a Kiberiáda a legjobb belépő.",
   },
-  clarke: {
-    name: "Arthur C. Clarke Űrodisszeia ciklusa",
-    author: "Arthur C. Clarke",
+  szerbantal: {
+    name: "Szerb Antal mesterművei",
+    author: "Szerb Antal",
     recommendedOrder: [
-      "1. 2001. Űrodisszeia (A titokzatos fekete monolit és a HAL 9000)",
-      "2. 2010. Második űrodisszeia (A Jupiter csillaggá válása és az Europa védelme)",
-      "3. 2061. Harmadik űrodisszeia (A Halley-üstökös expedíciója)",
-      "4. 3001. Végső űrodisszeia (Frank Poole feltámadása és a monolitok végzete)",
-      "Önálló remekmű: Randevú a Rámával (Az idegen csillaghajó felfedezése)",
+      "1. Utas és holdvilág (1937) – Mihály toszkán utazása, a nosztalgia és a kamaszkor feloldhatatlan mítosza",
+      "2. A Pendragon legenda (1934) – Filozofikus krimi, rózsakeresztes misztika Walesben",
+      "3. A királyné nyaklánca – A francia forradalom előestéjének sziporkázó története",
+      "4. A világirodalom története / A magyar irodalom története – Esszéírói remekművek",
     ],
-    advice: "A négy Űrodisszeia kötet szorosan összefügg, pontosan ebben a megjelenési és belső időrendben érdemes olvasni.",
+    advice: "Az Utas és holdvilág a magyar irodalom egyik legmegindítóbb és legszebb regénye; mindenkinek kötelező legalább egyszer átélni!",
   },
-  adams: {
-    name: "Galaxis útikalauz stopposoknak (öt részes trilógia)",
-    author: "Douglas Adams",
+  marai: {
+    name: "Márai Sándor életműve",
+    author: "Márai Sándor",
     recommendedOrder: [
-      "1. Galaxis útikalauz stopposoknak (Arthur Dent, Ford Prefect és a 42-es válasz)",
-      "2. Vendéglő a világ végén (Milliways és az univerzum pusztulásának látványa)",
-      "3. Az élet, a világmindenség, meg minden",
-      "4. Viszlát, és kösz a halakat!",
-      "5. Jobbára ártalmatlan",
+      "1. A gyertyák csonkig égnek (1942) – Henrik tábornok és Konrád éjszakai szembesülése",
+      "2. Egy polgár vallomásai (1934) – A polgári ethosz monumentális önéletrajza",
+      "3. Eszter hagyatéka (1939) – A megbocsátás és a sorsfordító szerelem lélektana",
+      "4. San Gennaro vére / Naplók – A száműzetés megrázó dokumentumai",
     ],
-    advice: "Szigorúan az 1. kötettel kezdj, és ne felejtsd otthon a törülköződet!",
+    advice: "Kezdésnek A gyertyák csonkig égnek ajánlott, amely a barátság, hűség és árulás legmélyebb kérdéseit feszegeti.",
   },
-  orwell: {
-    name: "George Orwell politikai és társadalmi disztópiái",
-    author: "George Orwell",
+  king: {
+    name: "Stephen King legkiemelkedőbb művei",
+    author: "Stephen King",
     recommendedOrder: [
-      "1. Állatfarm (1945) – Zseniális szatíra a hatalom megrontó természetéről",
-      "2. 1984 (1949) – Winston Smith tragédiája, a Gondolatrendőrség és a Nagy Testvér",
-      "3. Hódolat Katalóniának (Önéletrajzi beszámoló a spanyol polgárháborúról)",
+      "1. A ragyogás (The Shining) – Jack Torrance és a Panoráma Hotel",
+      "2. Végítélet (The Stand) – A szuperinfluenza utáni monumentális túlélés",
+      "3. 11/22/63 – Időutazás a Kennedy-gyilkosság megakadályozására",
+      "4. Az (It) – Derry városa és a gyermekkori félelmek leküzdése",
+      "5. A Setét Torony (The Dark Tower) 1-7. kötet – King magnum opusa",
     ],
-    advice: "Az Állatfarm tökéletes és gyors bevezetés Orwell szimbolikájába, amelyet a felkavaró mélységű 1984 tesz teljessé.",
+    advice: "A pszichológiai mélységért a Ragyogás vagy a 11/22/63 a legjobb indulás King sokszínű világában.",
   },
 };
 
 /**
- * Intelligent Hungarian AI Librarian synthesizer
+ * Intelligent Hungarian AI Librarian synthesizer grounded in Moly.hu, MEK/OSZK, and Wikipedia HU
  */
 export function synthesizeHungarianLibrarianAnswer(
   query: string,
   matchedBooks: BookItem[],
   wikiContext: AIKnowledgeContext | null,
-  googleContext: AIKnowledgeContext | null
+  googleContext: AIKnowledgeContext | null,
+  molyContext?: AIKnowledgeContext | null
 ): string {
   const norm = query
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
-  // 1. Check for famous series reading order request
+  // 1. Reading Order Query
   for (const [key, series] of Object.entries(FAMOUS_SERIES_ORDERS)) {
     if (
       norm.includes(key) ||
@@ -376,9 +407,9 @@ export function synthesizeHungarianLibrarianAnswer(
       (key === "gyurukura" && (norm.includes("tolkien") || norm.includes("gyuruk") || norm.includes("frodo"))) ||
       (key === "rejto" && (norm.includes("rejto") || norm.includes("piszkos fred") || norm.includes("gorcsev") || norm.includes("legio"))) ||
       (key === "lem" && (norm.includes("lem") || norm.includes("solaris") || norm.includes("kiberiada"))) ||
-      (key === "clarke" && (norm.includes("clarke") || norm.includes("urodisszeia") || norm.includes("2001"))) ||
-      (key === "adams" && (norm.includes("adams") || norm.includes("galaxis") || norm.includes("utikalauz") || norm.includes("stoppos"))) ||
-      (key === "orwell" && (norm.includes("orwell") || norm.includes("1984") || norm.includes("allatfarm")))
+      (key === "szerbantal" && (norm.includes("szerb") || norm.includes("utas es holdvilag") || norm.includes("pendragon"))) ||
+      (key === "marai" && (norm.includes("marai") || norm.includes("gyertyak"))) ||
+      (key === "king" && (norm.includes("stephen king") || norm.includes("ragyogas") || norm.includes("setet torony")))
     ) {
       if (
         norm.includes("sorrend") ||
@@ -388,18 +419,24 @@ export function synthesizeHungarianLibrarianAnswer(
         norm.includes("olvassam") ||
         norm.includes("kötet")
       ) {
-        let answer = `### 📚 ${series.name} – Ajánlott olvasási sorrend\n\n`;
+        let answer = `### 📚 ${series.name} – Ajánlott olvasási kalauz és sorrend\n\n`;
         answer += `**Szerző:** ${series.author}\n\n`;
-        answer += `A sorozat köteteit a következő logikai és kanonikus sorrendben érdemes olvasni a legteljesebb élményért:\n\n`;
+
+        if (molyContext?.molyRating) {
+          answer += `> 🌟 **Moly.hu olvasói értékelés:** ${molyContext.molyRating} ★ (nagyon magas olvasottság és elismertség)\n\n`;
+        }
+
+        answer += `A sorozat köteteit a következő logikai és kanonikus sorrendben érdemes olvasni a legteljesebb irodalmi élményért:\n\n`;
         for (const item of series.recommendedOrder) {
           answer += `* ${item}\n`;
         }
-        answer += `\n> **Könyvtáros tanácsa:** ${series.advice}\n\n`;
+        answer += `\n> 💡 **A Könyvtáros tanácsa:** ${series.advice}\n\n`;
 
         if (matchedBooks.length > 0) {
           answer += `#### 📖 A könyvtáradban azonnal elérhető kötetek ebből a ciklusból:\n`;
-          for (const b of matchedBooks.slice(0, 5)) {
-            answer += `* **[${b.title}](/book/${b.slug || b.id})** – ${b.authors.map((a) => a.name).join(", ")}${b.publishedYear ? ` (${b.publishedYear})` : ""}\n`;
+          for (const b of matchedBooks.slice(0, 6)) {
+            const y = b.publishedYear ? ` (${b.publishedYear})` : "";
+            answer += `* **[${b.title}](/book/${b.slug || b.id})** – ${b.authors.map((a) => a.name).join(", ")}${y} • *[Olvasás](/read/${b.slug || b.id})*\n`;
           }
         }
         return answer;
@@ -407,7 +444,7 @@ export function synthesizeHungarianLibrarianAnswer(
     }
   }
 
-  // 2. Author Inquiry (e.g. "Kicsoda Isaac Asimov?", "Mesélj Stephen Kingről")
+  // 2. Author Inquiry (e.g. "Kicsoda Szerb Antal?", "Mesélj Asimovról")
   const isAuthorQuery =
     norm.includes("kicsoda") ||
     norm.includes("ki az a") ||
@@ -416,107 +453,107 @@ export function synthesizeHungarianLibrarianAnswer(
     norm.includes("életrajz") ||
     norm.includes("szerző");
 
-  if (isAuthorQuery && (wikiContext?.wikiExtract || matchedBooks.length > 0)) {
-    let answer = `### ✍️ Szerzői Portré: ${wikiContext?.wikiTitle || matchedBooks[0]?.authors[0]?.name || "Keresett Szerző"}\n\n`;
+  if (isAuthorQuery && (wikiContext?.wikiExtract || molyContext?.molyAuthor || matchedBooks.length > 0)) {
+    const authorName =
+      molyContext?.molyAuthor ||
+      wikiContext?.wikiTitle ||
+      matchedBooks[0]?.authors[0]?.name ||
+      "Keresett Szerző";
+
+    let answer = `### ✍️ Szerzői Portré: ${authorName}\n\n`;
 
     if (wikiContext?.wikiExtract) {
       answer += `${wikiContext.wikiExtract}\n\n`;
+    } else if (molyContext?.molyDescription) {
+      answer += `${molyContext.molyDescription}\n\n`;
+    }
+
+    if (molyContext?.molyRating) {
+      answer += `> 🌟 **Közönségkedvenc:** A Moly.hu magyar olvasói közösségében kiemelkedő, **${molyContext.molyRating} ★** átlagos értékeléssel büszkélkedhet.\n\n`;
     }
 
     if (matchedBooks.length > 0) {
-      answer += `#### 📚 A könyvtáradban megtalálható művei:\n`;
+      answer += `#### 📚 A könyvtáradban közvetlenül elérhető kötetei:\n`;
       for (const b of matchedBooks.slice(0, 6)) {
         const rating = b.averageRating ? ` ★ ${b.averageRating.toFixed(1)}` : "";
-        answer += `* **[${b.title}](/book/${b.slug || b.id})**${b.publishedYear ? ` (${b.publishedYear})` : ""}${rating} – *${b.categories[0]?.name || "Könyv"}*\n`;
+        answer += `* **[${b.title}](/book/${b.slug || b.id})**${b.publishedYear ? ` (${b.publishedYear})` : ""}${rating} – *${b.categories[0]?.name || "Kötet"}* • [📖 Azonnali Olvasás](/read/${b.slug || b.id})\n`;
         if (b.description) {
-          const shortDesc = b.description.slice(0, 140).replace(/<[^>]+>/g, "").trim();
+          const shortDesc = b.description.slice(0, 150).replace(/<[^>]+>/g, "").trim();
           answer += `  _${shortDesc}..._\n`;
         }
       }
-      answer += `\n*Kattints a fenti könyvekre az azonnali olvasáshoz vagy letöltéshez!*`;
+      answer += `\n*Kattints bármelyik kötetre a digitális olvasó megnyitásához vagy a fájl letöltéséhez!*`;
     }
     return answer;
   }
 
-  // 3. Book Synopsis / Plot Inquiry (e.g. "Miről szól az Alapítvány?", "Dűne története")
+  // 3. Book Synopsis / Plot Inquiry
   const isPlotQuery =
     norm.includes("miről szól") ||
     norm.includes("tartalom") ||
     norm.includes("cselekmény") ||
     norm.includes("történet") ||
     norm.includes("ismertető") ||
-    norm.includes("összefoglaló");
+    norm.includes("összefoglaló") ||
+    norm.includes("lényeg");
 
-  if (isPlotQuery) {
-    const bookTitle = wikiContext?.wikiTitle || matchedBooks[0]?.title || "A kérdezett mű";
-    let answer = `### 📖 Ismertető és cselekmény: ${bookTitle}\n\n`;
+  if (isPlotQuery || molyContext?.molyDescription) {
+    const bookTitle =
+      molyContext?.molyTitle ||
+      wikiContext?.wikiTitle ||
+      matchedBooks[0]?.title ||
+      "A keresett mű";
 
-    if (wikiContext?.wikiExtract) {
+    let answer = `### 📖 Ismertető és Cselekmény: ${bookTitle}\n\n`;
+
+    if (molyContext?.molyDescription) {
+      answer += `> **Moly.hu hivatalos fülszöveg:**\n>\n> ${molyContext.molyDescription.replace(/\n/g, "\n> ")}\n\n`;
+    } else if (wikiContext?.wikiExtract) {
       answer += `${wikiContext.wikiExtract}\n\n`;
     } else if (googleContext?.googleDescription) {
-      answer += `${googleContext.googleDescription.slice(0, 500).replace(/<[^>]+>/g, "")}...\n\n`;
-    } else if (matchedBooks[0]?.description) {
-      answer += `${matchedBooks[0].description.slice(0, 500).replace(/<[^>]+>/g, "")}...\n\n`;
+      answer += `${googleContext.googleDescription.slice(0, 600).replace(/<[^>]+>/g, "")}...\n\n`;
+    }
+
+    if (molyContext?.molyRating) {
+      answer += `⭐ **Olvasói értékelés:** ${molyContext.molyRating} / 5.0 a magyar olvasók körében.\n\n`;
     }
 
     if (matchedBooks.length > 0) {
-      answer += `#### 📥 Elérhetőség a könyvtáradban:\n`;
       const top = matchedBooks[0];
+      answer += `#### 📥 Olvasd el azonnal a könyvtáradban:\n`;
       answer += `* **[${top.title}](/book/${top.slug || top.id})** – Szerző: **${top.authors.map((a) => a.name).join(", ")}**`;
       if (top.publishedYear) answer += ` (${top.publishedYear})`;
-      answer += `\n\nA könyv teljes szöveggel, közvetlen formátumokban elérhető az olvasóban vagy letöltésként!`;
+      answer += `\n\n👉 **[Kattints ide az online olvasó megnyitásához!](/read/${top.slug || top.id})**`;
     }
     return answer;
   }
 
   // 4. Recommendation / "Mit olvassak?" Inquiry
-  const isRecommendation =
-    norm.includes("mit olvassak") ||
-    norm.includes("ajánlj") ||
-    norm.includes("ajánlanál") ||
-    norm.includes("tipp") ||
-    norm.includes("keresek") ||
-    norm.includes("kedvenc") ||
-    norm.includes("legjobb");
+  let answer = `### 🏛️ Könyvtáros Ajánló és Szakvélemény\n\n`;
 
-  if (isRecommendation || matchedBooks.length > 0) {
-    let answer = `### 🌟 Könyvtáros Ajánló az igényeidre szabva\n\n`;
-
-    if (wikiContext?.wikiExtract) {
-      answer += `> _"${wikiContext.wikiExtract.slice(0, 220)}..."_\n\n`;
-    }
-
-    answer += `A könyvtár 11 472 kötetes állományából az alábbi kiemelkedő, azonnal olvasható műveket ajánlom:\n\n`;
-
-    for (let i = 0; i < Math.min(matchedBooks.length, 5); i++) {
-      const b = matchedBooks[i];
-      const authorStr = b.authors.map((a) => a.name).join(", ") || "Klasszikus szerző";
-      const genreStr = b.categories[0]?.name || "Ajánlott olvasmány";
-      answer += `**${i + 1}. [${b.title}](/book/${b.slug || b.id})** – ${authorStr}${b.publishedYear ? ` (${b.publishedYear})` : ""}\n`;
-      answer += `   * Kategória: **${genreStr}** • Értékelés: **${(b.averageRating || 4.8).toFixed(1)} ★**\n`;
-      if (b.description) {
-        const clean = b.description.replace(/<[^>]+>/g, "").trim().slice(0, 160);
-        answer += `   * _${clean}..._\n`;
-      }
-      answer += `\n`;
-    }
-
-    answer += `💡 *Tipp: Kattints bármelyik címre az online olvasás megnyitásához vagy a fájl letöltéséhez!*`;
-    return answer;
-  }
-
-  // 5. Default Comprehensive Response
-  let fallbackAnswer = `### 🏛️ Könyvtári Válasz a kérdésedre\n\n`;
   if (wikiContext?.wikiExtract) {
-    fallbackAnswer += `${wikiContext.wikiExtract}\n\n`;
+    answer += `> _"${wikiContext.wikiExtract.slice(0, 220)}..."_\n\n`;
   }
-  if (matchedBooks.length > 0) {
-    fallbackAnswer += `A témához kapcsolódóan az alábbi könyveket találod meg a gyűjteményedben:\n\n`;
-    for (const b of matchedBooks.slice(0, 4)) {
-      fallbackAnswer += `* **[${b.title}](/book/${b.slug || b.id})** – ${b.authors.map((a) => a.name).join(", ")}\n`;
+
+  if (molyContext?.molyDescription) {
+    answer += `> 📖 **Fülszöveg:** ${molyContext.molyDescription.slice(0, 250)}...\n\n`;
+  }
+
+  answer += `A digitális gyűjtemény 11 472 kötete közül az alábbi kiemelkedő, minőségi műveket ajánlom neked:\n\n`;
+
+  for (let i = 0; i < Math.min(matchedBooks.length, 5); i++) {
+    const b = matchedBooks[i];
+    const authorStr = b.authors.map((a) => a.name).join(", ") || "Klasszikus szerző";
+    const genreStr = b.categories[0]?.name || "Olvasmány";
+    answer += `**${i + 1}. [${b.title}](/book/${b.slug || b.id})** – ${authorStr}${b.publishedYear ? ` (${b.publishedYear})` : ""}\n`;
+    answer += `   * Műfaj: **${genreStr}** • Értékelés: **${(b.averageRating || 4.8).toFixed(1)} ★**\n`;
+    if (b.description) {
+      const clean = b.description.replace(/<[^>]+>/g, "").trim().slice(0, 160);
+      answer += `   * _${clean}..._\n`;
     }
-  } else {
-    fallbackAnswer += `A megadott témára a könyvtár keresőjében is érdemes rákeresned, vagy kérdezz bátran konkrét szerzőről, műfajról vagy olvasási sorrendről!`;
+    answer += `   * [📖 Olvasás indítása](/read/${b.slug || b.id})\n\n`;
   }
-  return fallbackAnswer;
+
+  answer += `💡 *Tipp: Kattints a címekre vagy az „Olvasás indítása” gombra a könyv azonnali böngészéséhez!*`;
+  return answer;
 }

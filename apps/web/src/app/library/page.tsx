@@ -7,12 +7,11 @@ import { BookCard } from "@/components/BookCard";
 
 const SORT_OPTIONS = [
   { value: "popular", label: "Ajánlott / Népszerű" },
-  { value: "author_asc", label: "Szerző szerint (A-Z)" },
-  { value: "author_desc", label: "Szerző szerint (Z-A)" },
-  { value: "title_asc", label: "Cím szerint (A-Z)" },
-  { value: "title_desc", label: "Cím szerint (Z-A)" },
+  { value: "newest", label: "Legújabb feltöltések" },
+  { value: "title_asc", label: "Cím (A-Z)" },
+  { value: "title_desc", label: "Cím (Z-A)" },
+  { value: "author_asc", label: "Szerző (A-Z)" },
   { value: "rating_desc", label: "Legjobbra értékelt" },
-  { value: "newest", label: "Legfrissebb kötetek" },
 ];
 
 export default function LibraryPage() {
@@ -148,23 +147,27 @@ export default function LibraryPage() {
           />
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <ArrowUpDown className="w-4 h-4 text-muted-foreground ml-1" />
-          <label htmlFor="library-sort" className="text-xs font-medium text-muted-foreground hidden md:inline">
+        <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+          <span className="text-xs font-semibold text-muted-foreground mr-1 flex items-center gap-1">
+            <ArrowUpDown className="w-3.5 h-3.5" />
             Rendezés:
-          </label>
-          <select
-            id="library-sort"
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="bg-background border border-input text-foreground text-xs font-semibold rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
-          >
-            {SORT_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
+          </span>
+          {SORT_OPTIONS.map((opt) => {
+            const isActive = sortBy === opt.value;
+            return (
+              <button
+                key={opt.value}
+                onClick={() => setSortBy(opt.value)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  isActive
+                    ? "bg-primary text-primary-foreground shadow-sm scale-105"
+                    : "bg-background/90 hover:bg-secondary text-muted-foreground hover:text-foreground border border-border/80"
+                }`}
+              >
                 {opt.label}
-              </option>
-            ))}
-          </select>
+              </button>
+            );
+          })}
         </div>
       </div>
 

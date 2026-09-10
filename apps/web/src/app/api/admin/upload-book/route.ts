@@ -104,21 +104,25 @@ export async function POST(req: NextRequest) {
       author = "Ismeretlen szerző";
     }
 
-    if (!coverUrl || !description) {
-      try {
-        const autoMeta = await fetchMetadataForBook(title, author);
-        if (!coverUrl && autoMeta.coverUrl) {
-          coverUrl = autoMeta.coverUrl;
-        }
-        if (!description && autoMeta.description) {
-          description = autoMeta.description;
-        }
-        if ((genre === "Általános" || !genre) && autoMeta.genre && autoMeta.genre !== "Általános") {
-          genre = autoMeta.genre;
-        }
-      } catch (e) {
-        console.warn("Auto metadata lookup fallback on upload:", e);
+    try {
+      const autoMeta = await fetchMetadataForBook(title, author);
+      if (!coverUrl && autoMeta.coverUrl) {
+        coverUrl = autoMeta.coverUrl;
       }
+      if (!description && autoMeta.description) {
+        description = autoMeta.description;
+      }
+      if ((author === "Ismeretlen szerző" || !author) && autoMeta.author && autoMeta.author !== "Ismeretlen szerző") {
+        author = autoMeta.author;
+      }
+      if ((genre === "Általános" || !genre) && autoMeta.genre) {
+        genre = autoMeta.genre;
+      }
+      if ((!publishedYear || publishedYear === new Date().getFullYear()) && autoMeta.publishedYear) {
+        publishedYear = autoMeta.publishedYear;
+      }
+    } catch (e) {
+      console.warn("Auto metadata lookup fallback on upload:", e);
     }
 
     if (!coverUrl) {

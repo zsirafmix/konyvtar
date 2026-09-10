@@ -8,6 +8,7 @@ import { checkRateLimit, RATE_LIMIT_CONFIGS, getClientIp } from "@/lib/security/
 import {
   fetchHungarianWikipedia,
   fetchGoogleBooksDetails,
+  fetchMolyLibrarianContext,
   queryExternalLLM,
   synthesizeHungarianLibrarianAnswer,
 } from "@/lib/ai-librarian-engine";
@@ -106,8 +107,9 @@ export async function POST(req: NextRequest) {
       candidateBooks = fallbackMatches.length > 0 ? fallbackMatches : getFallbackBookItems().slice(0, 5);
     }
 
-    // 2. Fetch external open knowledge (Hungarian Wikipedia & Google Books) in parallel
-    const [wikiContext, googleContext] = await Promise.all([
+    // 2. Fetch external open knowledge (Moly.hu, Hungarian Wikipedia & Google Books) in parallel
+    const [molyContext, wikiContext, googleContext] = await Promise.all([
+      fetchMolyLibrarianContext(query),
       fetchHungarianWikipedia(query),
       fetchGoogleBooksDetails(query),
     ]);
@@ -117,14 +119,16 @@ export async function POST(req: NextRequest) {
     const prompt = `Te egy rendkívül művelt, segítőkész, barátságos magyar mesterséges intelligencia könyvtáros vagy a digitális könyvtárban.
 Kérdés az olvasótól: "${query}"
 
-Hiteles háttérinformációk:
+Hiteles magyar könyvadatbázis háttérinformációk:
+${molyContext?.molyTitle ? `Moly.hu könyv: ${molyContext.molyTitle} (Szerző: ${molyContext.molyAuthor || "Ismeretlen"})${molyContext.molyRating ? `, Értékelés: ${molyContext.molyRating}★` : ""}` : ""}
+${molyContext?.molyDescription ? `Moly.hu fülszöveg: ${molyContext.molyDescription}` : ""}
 ${wikiContext?.wikiExtract ? `Magyar Wikipédia: ${wikiContext.wikiExtract}` : ""}
-${googleContext?.googleDescription ? `Google Books összefoglaló: ${googleContext.googleDescription}` : ""}
+${googleContext?.googleDescription ? `Google Books ismertető: ${googleContext.googleDescription}` : ""}
 
 A könyvtárunkban elérhető releváns könyvek:
 ${candidateBooks.slice(0, 5).map((b) => `- ${b.title} (${b.authors.map((a) => a.name).join(", ")}${b.publishedYear ? `, ${b.publishedYear}` : ""}) [műfaj: ${b.categories[0]?.name || "általános"}]`).join("\n")}
 
-Válaszolj igényes, gördülékeny, közvetlen magyar nyelven! Ha a kérdező olvasási sorrendet kér, add meg a pontos sorrendet. Ha szerzőről kérdez, mutasd be a jelentőségét. Ha könyvről kérdez, mutasd be a cselekményt. Hivatkozz a könyvtárunkban elérhető fenti kötetekre, hogy azonnal tudjon olvasni.`;
+Válaszolj igényes, gördülékeny, közvetlen magyar nyelven! Ha a kérdező olvasási sorrendet kér, add meg a pontos sorrendet. Ha szerzőről kérdez, mutasd be az életművét és jelentőségét. Ha könyvről kérdez, mutasd be a cselekményt és a témákat. Hivatkozz a könyvtárunkban elérhető fenti kötetekre közvetlenül linkkel ([Cím](/book/slug)), hogy azonnal tudjon olvasni.`;
 
     const llmAnswer = await queryExternalLLM(prompt);
     if (llmAnswer) {
@@ -135,7 +139,8 @@ Válaszolj igényes, gördülékeny, közvetlen magyar nyelven! Ha a kérdező o
         query,
         candidateBooks,
         wikiContext,
-        googleContext
+        googleContext,
+        molyContext
       );
     }
 
