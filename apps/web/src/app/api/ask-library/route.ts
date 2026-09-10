@@ -12,6 +12,7 @@ import {
   queryExternalLLM,
   synthesizeHungarianLibrarianAnswer,
 } from "@/lib/ai-librarian-engine";
+import { recordAiQuery } from "@/lib/site-stats";
 
 export const dynamic = "force-dynamic";
 
@@ -159,6 +160,10 @@ Válaszolj igényes, gördülékeny, közvetlen magyar nyelven! Ha a kérdező o
         dateKey,
       });
     }
+
+    try {
+      recordAiQuery(query, user);
+    } catch {}
 
     return NextResponse.json({
       answer: synthesizedText,

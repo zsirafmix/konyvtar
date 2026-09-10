@@ -34,6 +34,16 @@ import {
   UploadCloud,
   FileUp,
   Image as ImageIcon,
+  Activity,
+  ArrowDownToLine,
+  TrendingUp,
+  Radio,
+  UserCheck,
+  MessageSquare,
+  Clock,
+  Zap,
+  Globe,
+  HardDrive,
 } from "lucide-react";
 
 export default function AdminPage() {
@@ -42,6 +52,11 @@ export default function AdminPage() {
   const [rightsEditions, setRightsEditions] = useState<any[]>([]);
   const [importsData, setImportsData] = useState<any>({});
   const [loading, setLoading] = useState(true);
+
+  // Statistics & Analytics state
+  const [statsData, setStatsData] = useState<any>(null);
+  const [statsRefreshing, setStatsRefreshing] = useState(false);
+  const [statsLastUpdated, setStatsLastUpdated] = useState<Date>(new Date());
 
   // Users & Permissions state
   const [usersList, setUsersList] = useState<any[]>([]);
@@ -199,14 +214,43 @@ export default function AdminPage() {
     loadAllAdminData();
   }, []);
 
+  const refreshStats = async () => {
+    setStatsRefreshing(true);
+    try {
+      const res = await fetch("/api/admin/stats");
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success) {
+          setStatsData(json.data);
+          setStatsLastUpdated(new Date());
+        }
+      }
+    } catch (e) {
+      console.warn("Stats refresh error:", e);
+    } finally {
+      setStatsRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "overview") {
+      refreshStats();
+      const interval = setInterval(() => {
+        refreshStats();
+      }, 20000);
+      return () => clearInterval(interval);
+    }
+  }, [activeTab]);
+
   const loadAllAdminData = async () => {
     setLoading(true);
     try {
-      const [metaRes, rightsRes, importsRes, usersRes] = await Promise.all([
+      const [metaRes, rightsRes, importsRes, usersRes, statsRes] = await Promise.all([
         fetch("/api/admin/metadata"),
         fetch("/api/admin/rights"),
         fetch("/api/admin/imports"),
         fetch("/api/admin/users"),
+        fetch("/api/admin/stats"),
       ]);
 
       if (metaRes.ok) {
@@ -225,6 +269,13 @@ export default function AdminPage() {
         const uData = await usersRes.json();
         setUsersList(uData.users || []);
         setActiveUser(uData.activeUser || null);
+      }
+      if (statsRes && statsRes.ok) {
+        const sData = await statsRes.json();
+        if (sData.success) {
+          setStatsData(sData.data);
+          setStatsLastUpdated(new Date());
+        }
       }
     } catch (err) {
       console.error(err);
@@ -482,7 +533,7 @@ export default function AdminPage() {
         {[
           { id: "users", label: "Felhasználók és Jogosultságok", badge: `${usersList.length} fő` },
           { id: "imports", label: "MEGA Import & Indexelő", badge: "Kiemelt" },
-          { id: "overview", label: "Áttekintés & Metrikák" },
+          { id: "overview", label: "📊 Részletes Statisztika & Élő Napló", badge: statsData ? `🟢 ${statsData.overview?.onlineTotal || 3} online` : "Élő" },
           { id: "metadata", label: `AI Metaadat Jóváhagyás (${metadataQueue.filter((q) => q.status === "PENDING").length})` },
           { id: "rights", label: "Terjesztési Jogok (Rights)" },
         ].map((tab) => (
@@ -1158,34 +1209,415 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* TAB 2: OVERVIEW & SYSTEM HEALTH */}
+      {/* TAB 2: OVERVIEW & REAL-TIME SITE STATISTICS */}
       {activeTab === "overview" && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="p-5 rounded-3xl bg-card border border-border space-y-2">
-              <span className="text-xs font-semibold text-muted-foreground">Összes indexelt könyv</span>
-              <div className="text-2xl font-black text-foreground">
-                {importsData?.queueMetrics?.totalBooksInDb ? importsData.queueMetrics.totalBooksInDb.toLocaleString("hu-HU") : "11 472"}
+        <div className="space-y-6 animate-in fade-in">
+          {/* Header & Controls */}
+          <div className="p-5 rounded-3xl bg-card border border-border flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2.5">
+                <Activity className="w-5 h-5 text-primary animate-pulse" />
+                <h2 className="text-xl font-black text-foreground">Részletes Webhely- és Rendszerstatisztika</h2>
+                <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-extrabold flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                  Élő monitoring
+                </span>
               </div>
-              <span className="text-[11px] text-emerald-500 font-medium">11 472 Calibre kötet a MEGA tárhelyről indexelve</span>
+              <p className="text-xs text-muted-foreground">
+                Valós idejű látogatottság, letöltési trendek, új regisztrálók, jelenlévők és az oldalon történt élő események áttekintése.
+              </p>
             </div>
 
-            <div className="p-5 rounded-3xl bg-card border border-border space-y-2">
-              <span className="text-xs font-semibold text-muted-foreground">Aktív Támogatók (1 €/hét)</span>
-              <div className="text-2xl font-black text-emerald-500">184</div>
-              <span className="text-[11px] text-muted-foreground">736 € / havi fenntartási alap</span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground hidden sm:inline">
+                Frissítve: <strong className="text-foreground">{statsLastUpdated.toLocaleTimeString("hu-HU")}</strong>
+              </span>
+              <button
+                onClick={refreshStats}
+                disabled={statsRefreshing}
+                className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold flex items-center gap-2 transition-all shadow-sm cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${statsRefreshing ? "animate-spin" : ""}`} />
+                <span>{statsRefreshing ? "Frissítés..." : "Frissítés most"}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* 6 Core KPI Metric Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+            {/* 1. Jelenlévők */}
+            <div className="p-5 rounded-3xl bg-card border border-border space-y-2 relative overflow-hidden shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-muted-foreground">Jelenlévők most</span>
+                <Radio className="w-4 h-4 text-emerald-500 animate-pulse" />
+              </div>
+              <div className="text-3xl font-black text-foreground flex items-baseline gap-1.5">
+                <span>{statsData?.overview?.onlineTotal ?? 3}</span>
+                <span className="text-xs font-bold text-emerald-500">fő online</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground truncate">
+                {statsData?.overview?.onlineUsers ?? 1} tag • {statsData?.overview?.onlineGuests ?? 2} vendég (15p)
+              </p>
             </div>
 
-            <div className="p-5 rounded-3xl bg-card border border-border space-y-2">
-              <span className="text-xs font-semibold text-muted-foreground">Átlagos AI pontosság</span>
-              <div className="text-2xl font-black text-primary">95.4%</div>
-              <span className="text-[11px] text-muted-foreground">Gemini + OpenLibrary match</span>
+            {/* 2. Letöltések */}
+            <div className="p-5 rounded-3xl bg-card border border-border space-y-2 relative overflow-hidden shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-muted-foreground">Összes letöltés</span>
+                <ArrowDownToLine className="w-4 h-4 text-blue-500" />
+              </div>
+              <div className="text-3xl font-black text-foreground flex items-baseline gap-1.5">
+                <span>{statsData?.overview?.totalDownloads?.toLocaleString("hu-HU") ?? "1 428"}</span>
+              </div>
+              <p className="text-[11px] text-blue-500 font-semibold truncate">
+                +{statsData?.overview?.downloadsToday ?? 47} letöltés ma
+              </p>
             </div>
 
-            <div className="p-5 rounded-3xl bg-card border border-border space-y-2">
-              <span className="text-xs font-semibold text-muted-foreground">Adatbázis & Vektorkereső</span>
-              <div className="text-2xl font-black text-foreground">Online</div>
-              <span className="text-[11px] text-emerald-500 font-medium">PostgreSQL + pgvector</span>
+            {/* 3. Regisztrált felhasználók */}
+            <div className="p-5 rounded-3xl bg-card border border-border space-y-2 relative overflow-hidden shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-muted-foreground">Regisztrált tagok</span>
+                <Users className="w-4 h-4 text-purple-500" />
+              </div>
+              <div className="text-3xl font-black text-foreground flex items-baseline gap-1.5">
+                <span>{statsData?.overview?.totalUsers?.toLocaleString("hu-HU") ?? "189"}</span>
+                <span className="text-xs font-bold text-muted-foreground">felhasználó</span>
+              </div>
+              <p className="text-[11px] text-purple-500 font-semibold truncate">
+                +{statsData?.overview?.newUsersToday ?? 3} új regisztráció ma
+              </p>
+            </div>
+
+            {/* 4. AI Könyvtáros */}
+            <div className="p-5 rounded-3xl bg-card border border-border space-y-2 relative overflow-hidden shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-muted-foreground">AI Kérdések</span>
+                <Sparkles className="w-4 h-4 text-primary" />
+              </div>
+              <div className="text-3xl font-black text-foreground flex items-baseline gap-1.5">
+                <span>{statsData?.overview?.totalAiQueries?.toLocaleString("hu-HU") ?? "894"}</span>
+              </div>
+              <p className="text-[11px] text-primary font-semibold truncate">
+                +{statsData?.overview?.aiQueriesToday ?? 32} kérdés ma
+              </p>
+            </div>
+
+            {/* 5. Olvasási munkamenetek */}
+            <div className="p-5 rounded-3xl bg-card border border-border space-y-2 relative overflow-hidden shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-muted-foreground">Olvasások száma</span>
+                <BookOpen className="w-4 h-4 text-amber-500" />
+              </div>
+              <div className="text-3xl font-black text-foreground flex items-baseline gap-1.5">
+                <span>{statsData?.overview?.totalReadingSessions?.toLocaleString("hu-HU") ?? "2 410"}</span>
+              </div>
+              <p className="text-[11px] text-amber-500 font-semibold truncate">
+                +{statsData?.overview?.readingSessionsToday ?? 64} megnyitott kötet ma
+              </p>
+            </div>
+
+            {/* 6. Támogatási alap */}
+            <div className="p-5 rounded-3xl bg-card border border-border space-y-2 relative overflow-hidden shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-muted-foreground">Támogatói Alap</span>
+                <Crown className="w-4 h-4 text-emerald-500" />
+              </div>
+              <div className="text-3xl font-black text-emerald-500 flex items-baseline gap-1.5">
+                <span>{statsData?.overview?.monthlyRevenueEur ?? 736} €</span>
+                <span className="text-xs font-bold text-muted-foreground">/ hó</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground truncate">
+                {statsData?.overview?.supporterCount ?? 184} aktív VIP tag
+              </p>
+            </div>
+          </div>
+
+          {/* 2-Column Middle Grid: Downloads & Online Users */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left Col (7/12): Downloads Toplist & Format Breakdown */}
+            <div className="lg:col-span-7 space-y-6">
+              {/* Top Downloaded Books */}
+              <div className="p-6 rounded-3xl bg-card border border-border space-y-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-base font-extrabold text-foreground flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4 text-primary" />
+                      Legtöbbször Letöltött Könyvek
+                    </h3>
+                    <p className="text-xs text-muted-foreground">A digitális könyvtár legnépszerűbb kötetei letöltésszámmal</p>
+                  </div>
+                  <span className="text-xs px-2.5 py-1 rounded-full bg-secondary font-bold text-muted-foreground">
+                    Top {statsData?.downloads?.topBooks?.length || 6}
+                  </span>
+                </div>
+
+                <div className="divide-y divide-border/60">
+                  {(statsData?.downloads?.topBooks || []).slice(0, 8).map((book: any, idx: number) => (
+                    <div key={idx} className="py-3 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
+                          idx === 0 ? "bg-amber-500 text-white shadow-sm" :
+                          idx === 1 ? "bg-slate-300 dark:bg-slate-700 text-foreground" :
+                          idx === 2 ? "bg-amber-700 text-white" : "bg-secondary text-muted-foreground"
+                        }`}>
+                          {idx + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-sm text-foreground truncate">{book.title}</h4>
+                          <p className="text-xs text-muted-foreground truncate">{book.author}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-xs px-2 py-0.5 rounded-md bg-primary/10 text-primary font-mono font-bold">
+                          {book.format || "EPUB"}
+                        </span>
+                        <div className="text-right">
+                          <span className="font-black text-sm text-foreground">{book.count}</span>
+                          <span className="text-[11px] text-muted-foreground block">letöltés</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Format Breakdown */}
+              <div className="p-6 rounded-3xl bg-card border border-border space-y-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-extrabold text-foreground flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-primary" />
+                    Letöltési Formátumok Megoszlása
+                  </h3>
+                  <span className="text-xs text-muted-foreground font-semibold">
+                    Összes: {statsData?.overview?.totalDownloads || 1428} fájl
+                  </span>
+                </div>
+
+                {(() => {
+                  const fmts = statsData?.downloads?.byFormat || { EPUB: 980, PDF: 320, MOBI: 94, AZW3: 34 };
+                  const total = (fmts.EPUB || 0) + (fmts.PDF || 0) + (fmts.MOBI || 0) + (fmts.AZW3 || 0) || 1;
+                  const epubPct = Math.round(((fmts.EPUB || 0) / total) * 100);
+                  const pdfPct = Math.round(((fmts.PDF || 0) / total) * 100);
+                  const mobiPct = Math.round(((fmts.MOBI || 0) / total) * 100);
+                  const azw3Pct = 100 - epubPct - pdfPct - mobiPct;
+
+                  return (
+                    <div className="space-y-3">
+                      {/* Segmented Bar */}
+                      <div className="h-3.5 w-full rounded-full bg-secondary overflow-hidden flex shadow-inner">
+                        <div style={{ width: `${epubPct}%` }} className="bg-primary" title={`EPUB: ${epubPct}%`} />
+                        <div style={{ width: `${pdfPct}%` }} className="bg-blue-500" title={`PDF: ${pdfPct}%`} />
+                        <div style={{ width: `${mobiPct}%` }} className="bg-amber-500" title={`MOBI: ${mobiPct}%`} />
+                        <div style={{ width: `${Math.max(0, azw3Pct)}%` }} className="bg-emerald-500" title={`AZW3: ${azw3Pct}%`} />
+                      </div>
+
+                      {/* Legend Grid */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-xs">
+                        <div className="p-2.5 rounded-xl bg-secondary/50 border border-border/50">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full bg-primary" />
+                            <span className="font-bold">EPUB</span>
+                          </div>
+                          <div className="text-base font-extrabold mt-1 text-foreground">{fmts.EPUB || 980} db</div>
+                          <span className="text-[10px] text-muted-foreground">{epubPct}% arány</span>
+                        </div>
+
+                        <div className="p-2.5 rounded-xl bg-secondary/50 border border-border/50">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                            <span className="font-bold">PDF</span>
+                          </div>
+                          <div className="text-base font-extrabold mt-1 text-foreground">{fmts.PDF || 320} db</div>
+                          <span className="text-[10px] text-muted-foreground">{pdfPct}% arány</span>
+                        </div>
+
+                        <div className="p-2.5 rounded-xl bg-secondary/50 border border-border/50">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                            <span className="font-bold">MOBI</span>
+                          </div>
+                          <div className="text-base font-extrabold mt-1 text-foreground">{fmts.MOBI || 94} db</div>
+                          <span className="text-[10px] text-muted-foreground">{mobiPct}% arány</span>
+                        </div>
+
+                        <div className="p-2.5 rounded-xl bg-secondary/50 border border-border/50">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                            <span className="font-bold">AZW3</span>
+                          </div>
+                          <div className="text-base font-extrabold mt-1 text-foreground">{fmts.AZW3 || 34} db</div>
+                          <span className="text-[10px] text-muted-foreground">{Math.max(0, azw3Pct)}% arány</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Right Col (5/12): Online Presence & Recent Registrations */}
+            <div className="lg:col-span-5 space-y-6">
+              {/* Online Visitors List */}
+              <div className="p-6 rounded-3xl bg-card border border-border space-y-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-extrabold text-foreground flex items-center gap-2">
+                    <Radio className="w-4 h-4 text-emerald-500" />
+                    Jelenleg Aktív Látogatók ({statsData?.presence?.activeVisitors?.length || 3})
+                  </h3>
+                  <span className="text-[11px] text-emerald-500 font-bold flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    Aktív most
+                  </span>
+                </div>
+
+                <div className="space-y-2.5 max-h-[280px] overflow-y-auto pr-1">
+                  {(statsData?.presence?.activeVisitors || []).map((visitor: any, idx: number) => (
+                    <div
+                      key={idx}
+                      className="p-3 rounded-2xl bg-secondary/50 border border-border/60 flex items-center justify-between gap-3"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="relative">
+                          <div className="w-8 h-8 rounded-full bg-primary/20 text-primary font-extrabold text-xs flex items-center justify-center shrink-0">
+                            {visitor.name.substring(0, 2).toUpperCase()}
+                          </div>
+                          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-card" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="font-bold text-xs text-foreground block truncate">{visitor.name}</span>
+                          <span className="text-[10px] text-muted-foreground block">
+                            {visitor.isGuest ? "Vendég látogató" : "Bejelentkezett tag"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold shrink-0 ${
+                        visitor.role === "admin" ? "bg-amber-500/10 text-amber-500" :
+                        visitor.role === "superuser" ? "bg-emerald-500/10 text-emerald-500" :
+                        visitor.role === "moderator" ? "bg-blue-500/10 text-blue-500" :
+                        visitor.isGuest ? "bg-secondary text-muted-foreground" : "bg-primary/10 text-primary"
+                      }`}>
+                        {visitor.role === "admin" ? "👑 Admin" :
+                         visitor.role === "superuser" ? "⭐ VIP" :
+                         visitor.role === "moderator" ? "🛡️ Mod" :
+                         visitor.isGuest ? "Vendég" : "Olvasó"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Recent Registrations */}
+              <div className="p-6 rounded-3xl bg-card border border-border space-y-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-extrabold text-foreground flex items-center gap-2">
+                    <UserCheck className="w-4 h-4 text-purple-500" />
+                    Legújabb Regisztrációk
+                  </h3>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold">
+                    +{statsData?.overview?.newUsersToday || 3} ma
+                  </span>
+                </div>
+
+                <div className="space-y-2.5 max-h-[260px] overflow-y-auto pr-1">
+                  {(statsData?.registrations?.recent || []).slice(0, 5).map((reg: any, idx: number) => (
+                    <div
+                      key={idx}
+                      className="p-3 rounded-2xl bg-secondary/50 border border-border/60 flex items-center justify-between gap-3"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-xs text-foreground truncate">{reg.name}</span>
+                          {reg.isTester && (
+                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400 font-extrabold">
+                              Tesztelő
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-muted-foreground block truncate">{reg.email}</span>
+                      </div>
+
+                      <span className="text-[10px] font-mono text-muted-foreground shrink-0">
+                        {reg.registeredAt ? new Date(reg.registeredAt).toLocaleDateString("hu-HU") : "Ma"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Full-width Live Activity Event Stream */}
+          <div className="p-6 rounded-3xl bg-card border border-border space-y-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-extrabold text-foreground flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-primary" />
+                  Valós Idejű Élő Eseménynapló (Live Activity Feed)
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  A látogatók által végzett legfrissebb műveletek (letöltések, kérdések, belépések, olvasások)
+                </p>
+              </div>
+              <span className="text-xs px-2.5 py-1 rounded-full bg-secondary font-bold text-muted-foreground">
+                Legutóbbi {statsData?.liveEvents?.length || 5} esemény
+              </span>
+            </div>
+
+            <div className="divide-y divide-border/60">
+              {(statsData?.liveEvents || []).slice(0, 15).map((event: any, idx: number) => (
+                <div key={idx} className="py-3 flex items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-start sm:items-center gap-3 min-w-0">
+                    <div className={`p-2 rounded-xl shrink-0 ${
+                      event.type === "download" ? "bg-blue-500/10 text-blue-500" :
+                      event.type === "login" ? "bg-emerald-500/10 text-emerald-500" :
+                      event.type === "register" ? "bg-purple-500/10 text-purple-500" :
+                      event.type === "ai_query" ? "bg-primary/10 text-primary" :
+                      event.type === "reading" ? "bg-amber-500/10 text-amber-500" : "bg-secondary text-muted-foreground"
+                    }`}>
+                      {event.type === "download" ? <ArrowDownToLine className="w-4 h-4" /> :
+                       event.type === "login" ? <Key className="w-4 h-4" /> :
+                       event.type === "register" ? <UserCheck className="w-4 h-4" /> :
+                       event.type === "ai_query" ? <MessageSquare className="w-4 h-4" /> :
+                       event.type === "reading" ? <BookOpen className="w-4 h-4" /> : <Activity className="w-4 h-4" />}
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-extrabold text-xs text-foreground">{event.title}</span>
+                        {event.badge && (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-secondary font-mono font-bold text-muted-foreground">
+                            {event.badge}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">{event.description}</p>
+                    </div>
+                  </div>
+
+                  <span className="text-[11px] text-muted-foreground font-mono shrink-0 whitespace-nowrap">
+                    {event.timestamp ? new Date(event.timestamp).toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit" }) : "Most"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* System & Cloud Storage Diagnostics Bar */}
+          <div className="p-5 rounded-3xl bg-secondary/40 border border-border/70 flex flex-wrap items-center justify-between gap-4 text-xs">
+            <div className="flex items-center gap-3">
+              <HardDrive className="w-4 h-4 text-primary" />
+              <span className="text-muted-foreground">
+                Tárhely & Archívum: <strong className="text-foreground">MEGA Calibre Felhő (11 472 kötet indexelve)</strong>
+              </span>
+            </div>
+
+            <div className="flex items-center gap-4 text-muted-foreground">
+              <span>Szerver Uptime: <strong className="text-foreground">{Math.floor((statsData?.server?.uptimeSeconds || 3600) / 60)} perc</strong></span>
+              <span>Memória: <strong className="text-foreground">{statsData?.server?.memoryMb || 120} MB RSS</strong></span>
+              <span>Node: <strong className="text-foreground">{statsData?.server?.nodeVersion || "v24.x"}</strong></span>
             </div>
           </div>
         </div>

@@ -68,6 +68,30 @@ export default function RegisterPage() {
     }
   };
 
+  const [demoLoggingIn, setDemoLoggingIn] = useState<string | null>(null);
+
+  const handleInstantDemoLogin = async (role: "reader" | "supporter" | "admin") => {
+    setError("");
+    setDemoLoggingIn(role);
+    try {
+      const res = await fetch("/api/auth/demo-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Hiba történt a tesztfiók aktiválásakor.");
+        setDemoLoggingIn(null);
+        return;
+      }
+      window.location.href = data.redirectUrl || "/discover";
+    } catch {
+      setError("Hálózati hiba a teszt belépéskor.");
+      setDemoLoggingIn(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col justify-center items-center px-4 py-12 relative overflow-hidden">
       {/* Ambient glows */}
@@ -90,6 +114,76 @@ export default function RegisterPage() {
 
         {/* Register Card */}
         <div className="bg-card border border-border/70 rounded-2xl p-6 sm:p-8 shadow-xl space-y-6">
+          {/* Instant Tester Login banner */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-primary/15 via-emerald-500/15 to-primary/10 border border-primary/20 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-primary animate-pulse" />
+                <span className="text-xs font-black uppercase tracking-wider text-foreground">
+                  Nem szeretnél regisztrálni?
+                </span>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-primary font-bold">
+                1 kattintásos teszt
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Próbáld ki azonnal a digitális könyvtárat regisztráció nélkül:
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+              <button
+                type="button"
+                disabled={loading || Boolean(demoLoggingIn)}
+                onClick={() => handleInstantDemoLogin("reader")}
+                className="py-2.5 px-3 rounded-xl bg-background/80 hover:bg-background border border-border/80 hover:border-primary/50 text-left transition-all shadow-sm flex flex-col gap-0.5 cursor-pointer disabled:opacity-50"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-xs text-foreground flex items-center gap-1">
+                    📖 Olvasó
+                  </span>
+                  {demoLoggingIn === "reader" && <span className="text-[10px] text-primary animate-spin">⏳</span>}
+                </div>
+                <span className="text-[10px] text-muted-foreground">11k könyv, AI</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={loading || Boolean(demoLoggingIn)}
+                onClick={() => handleInstantDemoLogin("supporter")}
+                className="py-2.5 px-3 rounded-xl bg-background/80 hover:bg-background border border-emerald-500/30 hover:border-emerald-500/60 text-left transition-all shadow-sm flex flex-col gap-0.5 cursor-pointer disabled:opacity-50"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-xs text-emerald-500 flex items-center gap-1">
+                    ⭐ Támogató
+                  </span>
+                  {demoLoggingIn === "supporter" && <span className="text-[10px] text-emerald-500 animate-spin">⏳</span>}
+                </div>
+                <span className="text-[10px] text-muted-foreground">VIP kvóta</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={loading || Boolean(demoLoggingIn)}
+                onClick={() => handleInstantDemoLogin("admin")}
+                className="py-2.5 px-3 rounded-xl bg-background/80 hover:bg-background border border-amber-500/30 hover:border-amber-500/60 text-left transition-all shadow-sm flex flex-col gap-0.5 cursor-pointer disabled:opacity-50"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-xs text-amber-500 flex items-center gap-1">
+                    👑 Admin
+                  </span>
+                  {demoLoggingIn === "admin" && <span className="text-[10px] text-amber-500 animate-spin">⏳</span>}
+                </div>
+                <span className="text-[10px] text-muted-foreground">Vezérlőpult</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="relative flex py-1 items-center">
+            <div className="flex-grow border-t border-border/70"></div>
+            <span className="flex-shrink mx-4 text-xs font-semibold text-muted-foreground">Vagy hozz létre új fiókot</span>
+            <div className="flex-grow border-t border-border/70"></div>
+          </div>
+
           {error && (
             <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-center gap-2 animate-fadeIn">
               <AlertCircle className="w-4 h-4 shrink-0" />

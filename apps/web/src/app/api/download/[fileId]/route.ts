@@ -7,6 +7,7 @@ import { FALLBACK_BOOKS } from "@/lib/fallback-books";
 import { findFormatById, getMimeType, getUploadedFileBuffer } from "@/lib/mega-catalog";
 import { requireAuth, requirePermission, createAuditLog } from "@/lib/auth/guards";
 import { checkRateLimit, RATE_LIMIT_CONFIGS, getClientIp } from "@/lib/security/rate-limiter";
+import { recordDownload } from "@/lib/site-stats";
 
 export const dynamic = "force-dynamic";
 
@@ -278,6 +279,15 @@ export async function GET(req: NextRequest, { params }: { params: { fileId: stri
     // 0. Check if downloading a newly uploaded book binary
     const uploadedFile = getUploadedFileBuffer(fileId);
     if (uploadedFile) {
+      try {
+        recordDownload({
+          title: uploadedFile.filename.replace(/\.[^/.]+$/, ""),
+          author: "Feltöltött Könyv",
+          format: uploadedFile.filename.split(".").pop()?.toUpperCase() || "EPUB",
+          user,
+        });
+      } catch {}
+
       return new NextResponse(new Uint8Array(uploadedFile.buffer), {
         headers: {
           "Content-Disposition": makeContentDisposition(uploadedFile.filename),
@@ -300,6 +310,16 @@ export async function GET(req: NextRequest, { params }: { params: { fileId: stri
       const fileName = `${matchedBook.title} - ${matchedBook.authors[0]?.name || "Ismeretlen"}.${ext}`;
 
       const fileBuffer = isEpub ? generateEpubBuffer(matchedBook) : generatePdfBuffer(matchedBook);
+
+      try {
+        recordDownload({
+          title: matchedBook.title,
+          author: matchedBook.authors[0]?.name || "Ismeretlen",
+          format: ext.toUpperCase(),
+          slug: matchedBook.slug,
+          user,
+        });
+      } catch {}
 
       return new NextResponse(new Uint8Array(fileBuffer), {
         headers: {
@@ -335,6 +355,16 @@ export async function GET(req: NextRequest, { params }: { params: { fileId: stri
           fileBuffer.toString("utf8").startsWith("Librarian AI - MEGA Cloud Storage");
 
         if (!isFallbackText && fileBuffer.length > 0) {
+          try {
+            recordDownload({
+              title: formatInfo?.book?.title || fileName.replace(/\.[^/.]+$/, ""),
+              author: formatInfo?.book?.author || "Calibre Archívum",
+              format: formatInfo?.format || "EPUB",
+              slug: formatInfo?.book?.slug,
+              user,
+            });
+          } catch {}
+
           return new NextResponse(new Uint8Array(fileBuffer), {
             headers: {
               "Content-Disposition": makeContentDisposition(fileName),
@@ -358,6 +388,16 @@ export async function GET(req: NextRequest, { params }: { params: { fileId: stri
       const mimeType = isPdf ? "application/pdf" : "application/epub+zip";
       const ext = isPdf ? "pdf" : "epub";
       const fileName = `${formatInfo.book.title} - ${formatInfo.book.author}.${ext}`;
+
+      try {
+        recordDownload({
+          title: formatInfo.book.title,
+          author: formatInfo.book.author,
+          format: formatInfo.format || ext.toUpperCase(),
+          slug: formatInfo.book.slug,
+          user,
+        });
+      } catch {}
 
       return new NextResponse(new Uint8Array(fileBuffer), {
         headers: {
