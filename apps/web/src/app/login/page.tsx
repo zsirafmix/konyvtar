@@ -49,7 +49,7 @@ function LoginForm() {
 
   const [demoLoggingIn, setDemoLoggingIn] = useState<string | null>(null);
 
-  const handleInstantDemoLogin = async (role: "reader" | "supporter" | "admin") => {
+  const handleInstantDemoLogin = async (role: "reader" | "supporter") => {
     setError("");
     setDemoLoggingIn(role);
     try {
@@ -115,7 +115,7 @@ function LoginForm() {
             <p className="text-xs text-muted-foreground">
               Teszteld a könyvtárat regisztráció nélkül! Válassz egy szerepkört:
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
               <button
                 type="button"
                 disabled={loading || Boolean(demoLoggingIn)}
@@ -128,7 +128,7 @@ function LoginForm() {
                   </span>
                   {demoLoggingIn === "reader" && <span className="text-[10px] text-primary animate-spin">⏳</span>}
                 </div>
-                <span className="text-[10px] text-muted-foreground">11k könyv, AI</span>
+                <span className="text-[10px] text-muted-foreground">11k könyv, AI keresés</span>
               </button>
 
               <button
@@ -143,22 +143,7 @@ function LoginForm() {
                   </span>
                   {demoLoggingIn === "supporter" && <span className="text-[10px] text-emerald-500 animate-spin">⏳</span>}
                 </div>
-                <span className="text-[10px] text-muted-foreground">1000 AI kvóta</span>
-              </button>
-
-              <button
-                type="button"
-                disabled={loading || Boolean(demoLoggingIn)}
-                onClick={() => handleInstantDemoLogin("admin")}
-                className="py-2.5 px-3 rounded-xl bg-background/80 hover:bg-background border border-amber-500/30 hover:border-amber-500/60 text-left transition-all shadow-sm flex flex-col gap-0.5 cursor-pointer disabled:opacity-50"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-extrabold text-xs text-amber-500 flex items-center gap-1">
-                    👑 Admin
-                  </span>
-                  {demoLoggingIn === "admin" && <span className="text-[10px] text-amber-500 animate-spin">⏳</span>}
-                </div>
-                <span className="text-[10px] text-muted-foreground">Vezérlőpult</span>
+                <span className="text-[10px] text-muted-foreground">1000 AI kvóta, letöltés</span>
               </button>
             </div>
           </div>
@@ -225,40 +210,24 @@ function LoginForm() {
           {/* Demo test account helper */}
           <div className="pt-4 border-t border-border/60">
             <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block mb-2 text-center">
-              Gyors tesztfiók kiválasztása
+              Példa tesztfiók adatok
             </span>
-            <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
               <button
                 type="button"
-                onClick={() => handleFillDemo("admin@librarian.ai", "AdminPassword123!")}
-                className="p-2 rounded-lg bg-secondary/70 hover:bg-secondary border border-border/70 text-left transition-colors"
+                onClick={() => handleFillDemo("olvaso@librarian.ai", "UserPassword123!")}
+                className="p-2.5 rounded-lg bg-secondary/70 hover:bg-secondary border border-border/70 text-left transition-colors"
               >
-                <span className="font-bold block text-amber-500">👑 Admin</span>
-                <span className="text-[10px] text-muted-foreground">admin@librarian.ai</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleFillDemo("moderator@librarian.ai", "ModPassword123!")}
-                className="p-2 rounded-lg bg-secondary/70 hover:bg-secondary border border-border/70 text-left transition-colors"
-              >
-                <span className="font-bold block text-blue-500">🛡️ Moderátor</span>
-                <span className="text-[10px] text-muted-foreground">moderator@librarian.ai</span>
+                <span className="font-bold block text-foreground">📖 Olvasó (Ingyenes)</span>
+                <span className="text-[10px] text-muted-foreground">olvaso@librarian.ai</span>
               </button>
               <button
                 type="button"
                 onClick={() => handleFillDemo("supporter@librarian.ai", "UserPassword123!")}
-                className="p-2 rounded-lg bg-secondary/70 hover:bg-secondary border border-border/70 text-left transition-colors"
+                className="p-2.5 rounded-lg bg-secondary/70 hover:bg-secondary border border-border/70 text-left transition-colors"
               >
-                <span className="font-bold block text-emerald-500">⭐ Superuser ($1)</span>
+                <span className="font-bold block text-emerald-500">⭐ Támogató (VIP)</span>
                 <span className="text-[10px] text-muted-foreground">supporter@librarian.ai</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleFillDemo("olvaso@librarian.ai", "UserPassword123!")}
-                className="p-2 rounded-lg bg-secondary/70 hover:bg-secondary border border-border/70 text-left transition-colors"
-              >
-                <span className="font-bold block text-foreground">📖 Olvasó</span>
-                <span className="text-[10px] text-muted-foreground">olvaso@librarian.ai</span>
               </button>
             </div>
           </div>

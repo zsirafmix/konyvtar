@@ -70,7 +70,7 @@ export default function RegisterPage() {
 
   const [demoLoggingIn, setDemoLoggingIn] = useState<string | null>(null);
 
-  const handleInstantDemoLogin = async (role: "reader" | "supporter" | "admin") => {
+  const handleInstantDemoLogin = async (role: "reader" | "supporter") => {
     setError("");
     setDemoLoggingIn(role);
     try {
@@ -130,7 +130,7 @@ export default function RegisterPage() {
             <p className="text-xs text-muted-foreground">
               Próbáld ki azonnal a digitális könyvtárat regisztráció nélkül:
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
               <button
                 type="button"
                 disabled={loading || Boolean(demoLoggingIn)}
@@ -158,22 +158,7 @@ export default function RegisterPage() {
                   </span>
                   {demoLoggingIn === "supporter" && <span className="text-[10px] text-emerald-500 animate-spin">⏳</span>}
                 </div>
-                <span className="text-[10px] text-muted-foreground">VIP kvóta</span>
-              </button>
-
-              <button
-                type="button"
-                disabled={loading || Boolean(demoLoggingIn)}
-                onClick={() => handleInstantDemoLogin("admin")}
-                className="py-2.5 px-3 rounded-xl bg-background/80 hover:bg-background border border-amber-500/30 hover:border-amber-500/60 text-left transition-all shadow-sm flex flex-col gap-0.5 cursor-pointer disabled:opacity-50"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-extrabold text-xs text-amber-500 flex items-center gap-1">
-                    👑 Admin
-                  </span>
-                  {demoLoggingIn === "admin" && <span className="text-[10px] text-amber-500 animate-spin">⏳</span>}
-                </div>
-                <span className="text-[10px] text-muted-foreground">Vezérlőpult</span>
+                <span className="text-[10px] text-muted-foreground">VIP kvóta, letöltés</span>
               </button>
             </div>
           </div>

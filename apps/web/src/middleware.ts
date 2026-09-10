@@ -15,7 +15,10 @@ const PUBLIC_API_PREFIXES = [
   "/api/auth/login",
   "/api/auth/register",
   "/api/auth/logout",
+  "/api/auth/demo-login",
+  "/api/auth/active-user",
   "/api/health",
+  "/api/stats/presence",
 ];
 
 export function middleware(req: NextRequest) {
